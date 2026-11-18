@@ -135,10 +135,8 @@ export function cooBrief(s: CompanyState, decisionId: string): AdvisorBrief | nu
     citations.push({ selector: `${sel}.options[${id}].d30.delta.deliverySlipDays`, value: h.delta.deliverySlipDays });
     if (materialId) citations.push({ selector: `${sel}.options[${id}].d7.option.coverageDays.${materialId}`, value: cov(at(impacts, id, 7)) });
   }
-  if (b30) {
-    citations.push({ selector: `${sel}.options[${best}].d30.delta.overtimeHours`, value: b30.delta.overtimeHours });
-    citations.push({ selector: `${sel}.options[${best}].d30.option.riskLevel`, value: b30.option.riskLevel });
-  }
+  // riskLevel is not cited: it is a company-wide score that includes cash factors (CFO scope).
+  if (b30) citations.push({ selector: `${sel}.options[${best}].d30.delta.overtimeHours`, value: b30.delta.overtimeHours });
   const opt = d.options.find((o) => o.id === best);
   return {
     role: 'coo',
@@ -154,7 +152,6 @@ export function cooBrief(s: CompanyState, decisionId: string): AdvisorBrief | nu
         optionId: best,
         slipDelta: b30 ? b30.delta.deliverySlipDays : 0,
         coverageDays: cov(at(impacts, best, 7)),
-        riskLevel: b30 ? b30.option.riskLevel : 'low',
       },
     },
     citations,

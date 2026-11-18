@@ -101,7 +101,8 @@ export function tinyEngine(edit: (s: SeedBundle) => void = () => {}, rngSeed = 1
 /** Tiny engine whose Day-1 morning brings TINY_ORDER through the pipeline. */
 export function tinyWithOrder(edit: (s: SeedBundle) => void = () => {}): Engine {
   return tinyEngine((s) => {
-    s.eventCards.push(card('card_order', { kind: 'day', day: 1 }, TINY_ORDER));
+    // a copy: edits to this seed's card (e.g. a bigger qty) must not leak into TINY_ORDER
+    s.eventCards.push(card('card_order', { kind: 'day', day: 1 }, { ...TINY_ORDER }));
     edit(s);
   });
 }

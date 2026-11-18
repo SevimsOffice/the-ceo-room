@@ -14,6 +14,7 @@ import {
   revenueSince,
 } from '../selectors/metrics';
 import { avgSatisfaction } from '../systems/kpi';
+import { cloneState } from '../events/tx';
 import { turnoverBps } from '../systems/people';
 
 /** KPIs of a (projected) state, measured over the window that began on `sinceDay`. */
@@ -112,6 +113,8 @@ export function projectState(state: CompanyState, cmds: readonly Command[], days
     done = m;
     out.push({ days: m, kpis: snapshotKpis(s, start) });
   }
+  // Never hand out the input: a zero-day, no-command projection returns a copy.
+  if (s === state) s = cloneState(state);
   return {
     ok: true,
     fromDay: start,
@@ -148,6 +151,6 @@ export function projectedRunway(state: CompanyState): Runway {
       ? { days: neg.day - state.day, capped: false, firstNegativeDay: neg.day, horizonDays: horizon }
       : { days: horizon, capped: true, firstNegativeDay: null, horizonDays: horizon };
   }
-  runwayCache.set(state, result);
+  runwayCache.set(state, Object.freeze(result));
   return result;
 }

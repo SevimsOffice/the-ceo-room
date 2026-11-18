@@ -35,10 +35,16 @@ Pure building blocks (same code paths): `applyCommand(state, cmd)`, `advanceStat
   next morning, so it costs a day), `customDecision {decisionId, commands}` (allow-list in
   `CUSTOM_ALLOWED`).
 - Desk: `acknowledgeDevelopment {developmentId}` (telegrams without an open decision).
-- Operational (allow-listed): `setSupplierPrice`, `placePurchaseOrder`, `switchSupplier`,
-  `repriceOrders`, `grantDiscount`. `customerReaction` is only usable inside decision options.
+- Operational, CEO intent only (allow-listed): `placePurchaseOrder {supplierId, materialId, qty}`,
+  `switchSupplier {materialId, toSupplierId}`, `repriceOrders {materialId, passThroughBps}` (needs a
+  supplier-price decision on that material), `grantDiscount {customerId, discountBps}`. Prices and
+  customer reactions are derived by the engine from the decision's `basis` and `CUSTOMER_RULES`
+  (ADR-0007). `setSupplierPrice` and `customerReaction` are engine-built, usable only inside
+  decision options.
 
-Invalid commands return a typed error and change nothing.
+Invalid commands (unknown type, missing or extra field, non-integer or out-of-range number) return
+a typed error and change nothing. Committed state, ledger events and memoised read models are
+deep-frozen.
 
 ### Selectors
 
@@ -72,4 +78,4 @@ decision option builders, risk rules, CFO/COO advisors · `projection/` forward 
 - Determinism: `stateHash(engine.state())`; replay via `fromSnapshot`.
 - Cash conservation: `cash = openingCash + Σ ReceivableCollected − Σ PayableSettled − Σ RecurringCostPaid`.
 - Reducer throws `InvariantError` on negative stock or a double settlement.
-- `selectDecision` / runway results are memoised per state object (states are never mutated).
+- `selectDecision` / runway results are memoised per state object and frozen (states are never mutated).

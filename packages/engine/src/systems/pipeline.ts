@@ -11,6 +11,8 @@ export interface OrderInput {
   customerId: string;
   familyId: string;
   qty: number;
+  /** price before the customer's discount */
+  listUnitPrice: Money;
   unitPrice: Money;
   requestedDay: SimDay;
   paymentTermsDays: number;
@@ -33,6 +35,7 @@ export function registerOrder(tx: Tx, input: OrderInput, cause: Cause): Order {
     familyId: input.familyId,
     plantId: '',
     qty: input.qty,
+    listUnitPrice: input.listUnitPrice,
     unitPrice: input.unitPrice,
     value,
     paymentTermsDays: input.paymentTermsDays,

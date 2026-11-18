@@ -148,3 +148,66 @@ describe('projected cash runway is honest', () => {
     for (const k of rows.filter((x) => x.day < (rw.firstNegativeDay ?? 0))) expect(k.cash, `day ${k.day}`).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe('callers cannot change live state or memoised read models (review fix 7)', () => {
+  /** In ESM (strict mode) a write to a frozen object throws a TypeError. */
+  const throwsOnWrite = (write: () => void): void => expect(write).toThrow(TypeError);
+
+  it('engine.state(), its records and the ledger are frozen; a later read is unchanged', () => {
+    const e = engineAt();
+    e.advance(1);
+    const s = e.state();
+    const h = stateHash(s);
+    const w = s as unknown as { cash: number; orders: { value: number }[]; customers: { satisfaction: number }[] };
+    throwsOnWrite(() => (w.cash = 0));
+    throwsOnWrite(() => ((w.orders[0] as { value: number }).value = 1));
+    throwsOnWrite(() => w.orders.push({ value: 1 }));
+    throwsOnWrite(() => ((w.customers[0] as { satisfaction: number }).satisfaction = 10000));
+    const l = e.ledger() as unknown as unknown[];
+    throwsOnWrite(() => l.push({}));
+    const placed = e.ledger().find((x) => x.type === 'PurchaseOrderPlaced');
+    if (placed?.type !== 'PurchaseOrderPlaced') throw new Error('no PO event');
+    throwsOnWrite(() => ((placed.payload.po as { qty: number }).qty = 1));
+    const r = e.dispatch(approve('negotiate'));
+    if (!r.ok) throw new Error(r.error.code);
+    throwsOnWrite(() => ((r.events[0] as { day: number }).day = 99));
+    expect(stateHash(s)).toBe(h);
+    expect(e.state()).not.toBe(s);
+  });
+
+  it('selector outputs that point into state, and cached impacts and runway, are frozen', () => {
+    const e = engineAt();
+    const s = e.state();
+    const view = selectDecision(s, STEEL_DECISION);
+    if (!view?.impacts) throw new Error('no decision view');
+    throwsOnWrite(() => ((view.decision as { status: string }).status = 'approved'));
+    throwsOnWrite(() => ((view.decision.options[0] as { commands: unknown[] }).commands = []));
+    const h30 = view.impacts.options[0]?.horizons[1];
+    if (!h30) throw new Error('no +30 impact');
+    throwsOnWrite(() => ((h30.delta as { minCash: number }).minCash = 0));
+    throwsOnWrite(() => ((view.impacts as { options: unknown[] }).options.length = 0));
+    const order = selectOrderImpact(s, 'ord-0015');
+    throwsOnWrite(() => ((order?.order as { value: number }).value = 1));
+    throwsOnWrite(() => ((order?.plan as { cost: { total: number } }).cost.total = 1));
+    const runway = projectedRunway(s);
+    throwsOnWrite(() => ((runway as { days: number }).days = 999));
+    // a later reader sees the engine's numbers
+    expect(selectDecision(s, STEEL_DECISION)?.impacts).toBe(view.impacts);
+    expect(selectDecision(s, STEEL_DECISION)?.decision.status).toBe('open');
+    expect(projectedRunway(s).days).toBe(runway.days);
+    expect(selectAdvisorBrief(s, 'cfo', STEEL_DECISION)?.recommendedOptionId).toBe('switch');
+  });
+
+  it('a zero-day projection returns a copy, never the live state', () => {
+    const e = engineAt();
+    const s = e.state();
+    const h = stateHash(s);
+    const p = projectState(s, [], 0);
+    if (!p.ok) throw new Error(p.error.code);
+    expect(p.state).not.toBe(s);
+    expect(stateHash(p.state)).toBe(h);
+    (p.state as { cash: number }).cash = 0; // the copy is the caller's to change
+    expect(e.state().cash).not.toBe(0);
+    expect(stateHash(e.state())).toBe(h);
+  });
+});

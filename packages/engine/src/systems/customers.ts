@@ -1,5 +1,5 @@
-import type { Customer } from '../model/types';
-import { type Bps, type Score, clamp } from '../model/units';
+import type { Customer, DecisionBasis } from '../model/types';
+import { type Bps, type Score, clamp, roundHalfEven } from '../model/units';
 import { byId } from '../events/reduce';
 import { type Tx, rule } from '../events/tx';
 import type { Cause } from '../events/types';
@@ -14,7 +14,56 @@ export const CUSTOMER_RULES = {
   /** churn risk moves 1 bps per 1/100 point of satisfaction lost (and back) */
   churnPerSatisfaction: -1,
   churnThresholdBps: 6000 as Bps,
+  /** goodwill from an unsolicited discount: satisfaction per 100 bps of discount increase (0.25 pt per 1%) */
+  discountGoodwillPer100Bps: 25 as Score,
 } as const;
+
+export interface DerivedReaction {
+  satisfactionDelta: Score;
+  /** null = churn risk follows satisfaction (`churnPerSatisfaction`) */
+  churnRiskDelta: Bps | null;
+  reasonCode: string;
+}
+
+/**
+ * Reaction to passing on `passThroughBps` of a supplier price rise: the decision basis gives the
+ * reaction to a full pass-through; a partial one scales it linearly (banker's rounding).
+ */
+export function passOnReaction(
+  full: { satisfactionDelta: Score; churnRiskDelta: Bps; paymentDelayDays: number },
+  passThroughBps: Bps,
+): { satisfactionDelta: Score; churnRiskDelta: Bps; paymentDelayDays: number } {
+  const scale = (x: number): number => roundHalfEven((x * passThroughBps) / 10000);
+  return {
+    satisfactionDelta: scale(full.satisfactionDelta),
+    churnRiskDelta: scale(full.churnRiskDelta),
+    paymentDelayDays: scale(full.paymentDelayDays),
+  };
+}
+
+/**
+ * Reaction to a discount. Answering a discount demand (basis of the decision being resolved, same
+ * customer): granting nothing = the refusal reaction, granting at least the demand = the acceptance
+ * reaction, a partial grant interpolates linearly. Otherwise an unsolicited discount earns goodwill
+ * per 100 bps of increase over the customer's current discount; churn follows satisfaction.
+ */
+export function discountReaction(customer: Customer, discountBps: Bps, basis: DecisionBasis | null): DerivedReaction {
+  if (basis?.kind === 'discountDemand' && basis.customerId === customer.id && basis.discountBps > 0) {
+    const given = Math.min(discountBps, basis.discountBps);
+    const lerp = (refused: number, accepted: number): number => refused + roundHalfEven(((accepted - refused) * given) / basis.discountBps);
+    return {
+      satisfactionDelta: lerp(basis.refusal.satisfactionDelta, basis.acceptance.satisfactionDelta),
+      churnRiskDelta: lerp(basis.refusal.churnRiskDelta, basis.acceptance.churnRiskDelta),
+      reasonCode: given >= basis.discountBps ? 'reason.discountGranted' : given > 0 ? 'reason.discountPartial' : 'reason.discountRefused',
+    };
+  }
+  const increase = Math.max(0, discountBps - customer.discountBps);
+  return {
+    satisfactionDelta: roundHalfEven((increase * CUSTOMER_RULES.discountGoodwillPer100Bps) / 100),
+    churnRiskDelta: null,
+    reasonCode: 'reason.discountGranted',
+  };
+}
 
 export function changeSatisfaction(
   tx: Tx,

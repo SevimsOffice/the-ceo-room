@@ -49,7 +49,7 @@ export function stateFromSeed(seedIn: SeedBundle, opts: EngineOptions): CompanyS
     materials: stamp(seed.materials, ws),
     suppliers: stamp(seed.suppliers, ws),
     customers: stamp(seed.customers, ws),
-    orders: stamp(seed.orders.salesOrders, ws),
+    orders: stamp(seed.orders.salesOrders, ws).map((o) => ({ ...o, listUnitPrice: o.listUnitPrice ?? o.unitPrice })),
     purchaseOrders: stamp(seed.orders.purchaseOrders, ws),
     receivables: stamp(f.receivables, ws),
     payables: stamp(f.payables, ws),

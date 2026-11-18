@@ -20,6 +20,7 @@ export function runDemand(tx: Tx): void {
         customerId: c.id,
         familyId: d.familyId,
         qty,
+        listUnitPrice: list,
         unitPrice,
         requestedDay: s.day + d.leadDays,
         paymentTermsDays: c.paymentTermsDays,

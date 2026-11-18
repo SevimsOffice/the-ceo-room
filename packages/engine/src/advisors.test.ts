@@ -5,8 +5,19 @@
 import { describe, expect, it } from 'vitest';
 import { STEEL_DECISION, STEEL_OPTIONS, day1State, engineAt } from '../test/seedFixture';
 import { citedField, resolveCitation } from '../test/citations';
-import { ADVISOR_SCOPE, type AdvisorBrief, type AdvisorRole, selectAdvisorBrief, selectDecision } from './index';
-import { CFO_CASH_TOLERANCE } from './rules/advisors';
+import {
+  ADVISOR_SCOPE,
+  type AdvisorBrief,
+  type AdvisorRole,
+  CFO_CASH_TOLERANCE,
+  type CfoRow,
+  type CompanyState,
+  type CooRow,
+  rankCfo,
+  rankCoo,
+  selectAdvisorBrief,
+  selectDecision,
+} from './index';
 
 const ROLES: readonly AdvisorRole[] = ['cfo', 'coo'];
 const brief = (role: AdvisorRole): AdvisorBrief => {
@@ -92,5 +103,156 @@ describe('advisors on the Day-9 discount decision', () => {
     expect(['grant', 'refuse']).toContain(b.recommendedOptionId);
     for (const c of b.citations) expect(resolveCitation(s, c.selector), c.selector).toEqual(c.value);
     for (const c of b.citations) expect(ADVISOR_SCOPE[role].reads, c.selector).toContain(citedField(c.selector));
+  });
+});
+
+describe('CFO ranking: tolerance is a distance from the best, not a rounding bucket (review fix 4)', () => {
+  const T = CFO_CASH_TOLERANCE;
+  const ids = (r: { optionId: string }[]): string[] => r.map((x) => x.optionId);
+
+  it('1 kuruş apart across an old bucket boundary is a tie, so margin decides', () => {
+    // old key Math.round(minCash / T) put these in buckets 1 and 0 and ranked A first on cash alone
+    expect(Math.round(T / 2 / T)).not.toBe(Math.round((T / 2 - 1) / T));
+    const r = rankCfo([
+      { optionId: 'A', minCash: T / 2, grossMarginBps: 0 },
+      { optionId: 'B', minCash: T / 2 - 1, grossMarginBps: 100 },
+    ]);
+    expect(ids(r)).toEqual(['B', 'A']);
+    expect(r.map((x) => x.rank)).toEqual([1, 2]);
+  });
+
+  it('exactly the tolerance apart is a tie; one kuruş more is not', () => {
+    const at = (gap: number) =>
+      ids(
+        rankCfo([
+          { optionId: 'cash', minCash: 0, grossMarginBps: 0 },
+          { optionId: 'margin', minCash: -gap, grossMarginBps: 500 },
+        ]),
+      );
+    expect(at(T)).toEqual(['margin', 'cash']);
+    expect(at(T + 1)).toEqual(['cash', 'margin']);
+    // close to each other but not to the best: not tied with each other's bucket, ranked by cash
+    expect(
+      ids(
+        rankCfo([
+          { optionId: 'best', minCash: 5 * T, grossMarginBps: -900 },
+          { optionId: 'x', minCash: 2 * T, grossMarginBps: 0 },
+          { optionId: 'y', minCash: 2 * T - 1, grossMarginBps: 900 },
+        ]),
+      ),
+    ).toEqual(['best', 'x', 'y']);
+  });
+
+  it('ties keep option order when margin is also equal; empty input ranks nothing', () => {
+    expect(
+      ids(
+        rankCfo([
+          { optionId: 'p', minCash: -3, grossMarginBps: 10 },
+          { optionId: 'q', minCash: 0, grossMarginBps: 10 },
+          { optionId: 'r', minCash: -T, grossMarginBps: 10 },
+        ]),
+      ),
+    ).toEqual(['p', 'q', 'r']);
+    expect(rankCfo([])).toEqual([]);
+  });
+});
+
+describe('COO ranking keys (review fix 6)', () => {
+  const row = (optionId: string, o: Partial<CooRow> = {}): CooRow => ({
+    optionId,
+    deliverySlipDays: 0,
+    lateOrders: 0,
+    overtimeHours: 0,
+    coverage7: 0,
+    coverage30: 0,
+    ...o,
+  });
+  const ids = (r: { optionId: string }[]): string[] => r.map((x) => x.optionId);
+
+  it('slip, then late orders, then any extra overtime, then +7 and +30 coverage', () => {
+    expect(ids(rankCoo([row('a', { deliverySlipDays: 1 }), row('b', { lateOrders: 5 })]))).toEqual(['b', 'a']);
+    expect(ids(rankCoo([row('a', { lateOrders: 1 }), row('b', { overtimeHours: 50 })]))).toEqual(['b', 'a']);
+    expect(ids(rankCoo([row('a', { overtimeHours: 1, coverage7: 99 }), row('b', { overtimeHours: 0 })]))).toEqual(['b', 'a']);
+    // any increase in overtime counts the same; coverage decides between them
+    expect(ids(rankCoo([row('a', { overtimeHours: 5 }), row('b', { overtimeHours: 50, coverage7: 3 })]))).toEqual(['b', 'a']);
+    expect(ids(rankCoo([row('a', { coverage7: 10, coverage30: 0 }), row('b', { coverage7: 10, coverage30: 1 })]))).toEqual(['b', 'a']);
+    expect(ids(rankCoo([row('a'), row('b')]))).toEqual(['a', 'b']);
+  });
+});
+
+describe('a brief can be recomputed from its citations alone (review fix 6)', () => {
+  /** Parse `selectDecision(id).options[opt].d<H>.<path>` citations into per-option values. */
+  const cited = (b: AdvisorBrief): Map<string, Map<string, number>> => {
+    const out = new Map<string, Map<string, number>>();
+    for (const c of b.citations) {
+      const m = /^selectDecision\([^)]+\)\.options\[([^\]]+)\]\.(d\d+)\.(?:delta|option)\.(.+)$/.exec(c.selector);
+      if (!m) continue;
+      const [, opt = '', h = '', key = ''] = m;
+      const k = `${h}.${key.replace(/^coverageDays\..*$/, 'coverage')}`;
+      const per = out.get(opt) ?? new Map<string, number>();
+      if (per.has(k)) throw new Error(`cited twice: ${c.selector}`);
+      per.set(k, Number(c.value));
+      out.set(opt, per);
+    }
+    return out;
+  };
+  const need = (m: Map<string, number> | undefined, k: string): number => {
+    const v = m?.get(k);
+    if (v === undefined) throw new Error(`ranking key ${k} not cited`);
+    return v;
+  };
+
+  const cases: [string, () => Readonly<CompanyState>, string][] = [
+    ['steel, Day 1', () => day1State(), STEEL_DECISION],
+    [
+      'discount, Day 9',
+      () => {
+        const e = engineAt();
+        e.advance(8);
+        return e.state();
+      },
+      'dec-0002',
+    ],
+  ];
+
+  it.each(cases)('CFO on %s', (_, state, decisionId) => {
+    const s = state();
+    const b = selectAdvisorBrief(s, 'cfo', decisionId);
+    if (!b) throw new Error('no brief');
+    const c = cited(b);
+    const options = b.ranking.map((r) => r.optionId);
+    const rows: CfoRow[] = options.map((id) => ({ optionId: id, minCash: need(c.get(id), 'd30.minCash'), grossMarginBps: need(c.get(id), 'd30.grossMarginBps') }));
+    expect(rankCfo(rows)).toEqual(b.ranking);
+    // and by hand: among options within the tolerance of the best minimum cash, the best margin
+    const best = Math.max(...rows.map((r) => r.minCash));
+    const tied = rows.filter((r) => best - r.minCash <= CFO_CASH_TOLERANCE);
+    const top = Math.max(...tied.map((r) => r.grossMarginBps));
+    expect(tied.find((r) => r.grossMarginBps === top)?.optionId).toBe(b.recommendedOptionId);
+  });
+
+  it.each(cases)('COO on %s', (_, state, decisionId) => {
+    const s = state();
+    const b = selectAdvisorBrief(s, 'coo', decisionId);
+    if (!b) throw new Error('no brief');
+    const c = cited(b);
+    const withMaterial = typeof s.decisions.find((d) => d.id === decisionId)?.situation.params.materialId === 'string';
+    const rows: CooRow[] = b.ranking.map(({ optionId: id }) => ({
+      optionId: id,
+      deliverySlipDays: need(c.get(id), 'd30.deliverySlipDays'),
+      lateOrders: need(c.get(id), 'd30.lateOrders'),
+      overtimeHours: need(c.get(id), 'd30.overtimeHours'),
+      coverage7: withMaterial ? need(c.get(id), 'd7.coverage') : 0,
+      coverage30: withMaterial ? need(c.get(id), 'd30.coverage') : 0,
+    }));
+    expect(rankCoo(rows)).toEqual(b.ranking);
+    // and by hand: lexicographic minimum of the cited keys
+    const key = (r: CooRow): number[] => [r.deliverySlipDays, r.lateOrders, r.overtimeHours > 0 ? 1 : 0, -r.coverage7, -r.coverage30];
+    const byHand = [...rows].sort((x, y) => {
+      const a = key(x);
+      const z = key(y);
+      for (let i = 0; i < a.length; i++) if ((a[i] ?? 0) !== (z[i] ?? 0)) return (a[i] ?? 0) - (z[i] ?? 0);
+      return 0;
+    });
+    expect(byHand[0]?.optionId).toBe(b.recommendedOptionId);
   });
 });

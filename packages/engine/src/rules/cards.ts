@@ -73,6 +73,7 @@ export function fireCard(tx: Tx, card: EventCard): void {
           customerId: e.customerId,
           familyId: e.familyId,
           qty: e.qty,
+          listUnitPrice: e.unitPrice,
           unitPrice: e.unitPrice,
           requestedDay: s.day + e.requestedInDays,
           paymentTermsDays: e.paymentTermsDays,

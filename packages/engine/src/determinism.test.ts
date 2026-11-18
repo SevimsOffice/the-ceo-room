@@ -25,7 +25,8 @@ function script(e: Engine): void {
  * Golden hash of the scripted Day-31 state (rngSeed 42, seed v1). If an intentional engine or seed
  * change moves it, update it in the same commit and say why; an unexplained change is a bug.
  */
-const GOLDEN_DAY31 = '4a2184d8';
+// Review fixes 1 (Decision.basis) and 5 (Order.listUnitPrice) added state fields; outcomes unchanged.
+const GOLDEN_DAY31 = 'c1d8ee49';
 
 describe('same seed + same commands → identical state', () => {
   const a = newEngine();

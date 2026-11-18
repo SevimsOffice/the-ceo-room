@@ -16,7 +16,7 @@ export interface AdvisorBrief {
   titleKey: string;
   objective: Msg;
   recommendedOptionId: string;
-  ranking: { optionId: string; rank: number }[];
+  ranking: Ranking;
   rationale: Msg;
   citations: Citation[];
   assumptions: Msg[];
@@ -28,7 +28,7 @@ export const ADVISOR_SCOPE: Record<AdvisorRole, { departmentId: 'finance' | 'ope
   coo: { departmentId: 'operations', reads: ['deliverySlipDays', 'lateOrders', 'coverageDays', 'overtimeHours'] },
 };
 
-/** CFO treats cash differences under this many kuruş (100k TRY) as a tie. */
+/** CFO treats options whose +30 minimum cash is within this many kuruş (100k TRY) of the best as tied. */
 export const CFO_CASH_TOLERANCE = 10_000_000;
 
 const at = (impacts: DecisionImpacts, optionId: string, h: number): HorizonImpact | undefined =>
@@ -38,10 +38,12 @@ function headOf(s: CompanyState, dept: 'finance' | 'operations'): string {
   return s.departments.find((d) => d.id === dept)?.headName ?? '';
 }
 
-/** Ranks options by a lexicographic key (all ascending = better first); stable on option order. */
-function rank(ids: string[], key: (id: string) => number[]): { optionId: string; rank: number }[] {
-  const sorted = ids
-    .map((id, i) => ({ id, i, k: key(id) }))
+export type Ranking = { optionId: string; rank: number }[];
+
+/** Ranks rows by a lexicographic key (all ascending = better first); stable on input order. */
+function rank<R extends { optionId: string }>(rows: readonly R[], key: (r: R) => number[]): Ranking {
+  const sorted = rows
+    .map((r, i) => ({ id: r.optionId, i, k: key(r) }))
     .sort((a, b) => {
       for (let j = 0; j < a.k.length; j++) {
         const d = (a.k[j] ?? 0) - (b.k[j] ?? 0);
@@ -52,18 +54,57 @@ function rank(ids: string[], key: (id: string) => number[]): { optionId: string;
   return sorted.map((x, r) => ({ optionId: x.id, rank: r + 1 }));
 }
 
+/** The CFO's ranking keys for one option, all +30-day deltas against the baseline. */
+export interface CfoRow {
+  optionId: string;
+  minCash: number;
+  grossMarginBps: number;
+}
+
 /**
- * CFO: protect minimum projected cash over the next 30 days (and runway); margin breaks ties.
+ * CFO ranking: find the best +30 minimum cash; every option within `tolerance` kuruş of it is tied
+ * (inclusive) and ranked by gross margin; options further away follow by minimum cash, then margin.
+ */
+export function rankCfo(rows: readonly CfoRow[], tolerance: number = CFO_CASH_TOLERANCE): Ranking {
+  if (rows.length === 0) return [];
+  const best = Math.max(...rows.map((r) => r.minCash));
+  return rank(rows, (r) => (best - r.minCash <= tolerance ? [0, 0, -r.grossMarginBps] : [1, -r.minCash, -r.grossMarginBps]));
+}
+
+/** The COO's ranking keys for one option: +30 deltas, and the affected material's coverage. */
+export interface CooRow {
+  optionId: string;
+  deliverySlipDays: number;
+  lateOrders: number;
+  overtimeHours: number;
+  /** coverage days of the decision's material at +7 and +30 (0 when the decision has no material) */
+  coverage7: number;
+  coverage30: number;
+}
+
+/**
+ * COO ranking, lexicographic: least delivery slip, fewest late orders, no extra overtime (any
+ * increase counts the same), then most material coverage at +7, then at +30.
+ */
+export function rankCoo(rows: readonly CooRow[]): Ranking {
+  return rank(rows, (r) => [r.deliverySlipDays, r.lateOrders, r.overtimeHours > 0 ? 1 : 0, -r.coverage7, -r.coverage30]);
+}
+
+/**
+ * CFO: protect the minimum projected cash over the next 30 days; options within CFO_CASH_TOLERANCE
+ * of the best are tied and gross margin decides. Every ranking key of every option is cited; cash
+ * and runway are cited as context (not ranked).
  */
 export function cfoBrief(s: CompanyState, decisionId: string): AdvisorBrief | null {
   const d = s.decisions.find((x) => x.id === decisionId);
   const impacts = decisionImpacts(s, decisionId);
   if (!d || !impacts) return null;
-  const ids = impacts.options.filter((o) => !o.error).map((o) => o.optionId);
-  const ranking = rank(ids, (id) => {
-    const h = at(impacts, id, 30);
-    return h ? [-Math.round(h.delta.minCash / CFO_CASH_TOLERANCE), -h.delta.grossMarginBps] : [Infinity];
-  });
+  const rows: CfoRow[] = [];
+  for (const o of impacts.options) {
+    const h = o.error ? undefined : at(impacts, o.optionId, 30);
+    if (h) rows.push({ optionId: o.optionId, minCash: h.delta.minCash, grossMarginBps: h.delta.grossMarginBps });
+  }
+  const ranking = rankCfo(rows);
   const best = ranking[0]?.optionId ?? d.defaultOptionId;
   const b30 = at(impacts, best, 30);
   const b7 = at(impacts, best, 7);
@@ -73,14 +114,11 @@ export function cfoBrief(s: CompanyState, decisionId: string): AdvisorBrief | nu
     { selector: 'selectMorningReport.cash', value: s.cash },
     { selector: 'selectMorningReport.runway.days', value: runway.days },
   ];
-  for (const id of ids) {
-    const h = at(impacts, id, 30);
-    if (h) citations.push({ selector: `${sel}.options[${id}].d30.delta.minCash`, value: h.delta.minCash });
+  for (const r of rows) {
+    citations.push({ selector: `${sel}.options[${r.optionId}].d30.delta.minCash`, value: r.minCash });
+    citations.push({ selector: `${sel}.options[${r.optionId}].d30.delta.grossMarginBps`, value: r.grossMarginBps });
   }
-  if (b30) {
-    citations.push({ selector: `${sel}.baseline.d30.minCash`, value: b30.baseline.minCash });
-    citations.push({ selector: `${sel}.options[${best}].d30.delta.grossMarginBps`, value: b30.delta.grossMarginBps });
-  }
+  if (b30) citations.push({ selector: `${sel}.baseline.d30.minCash`, value: b30.baseline.minCash });
   if (b7) citations.push({ selector: `${sel}.options[${best}].d7.delta.cash`, value: b7.delta.cash });
   const opt = d.options.find((o) => o.id === best);
   return {
@@ -110,33 +148,44 @@ export function cfoBrief(s: CompanyState, decisionId: string): AdvisorBrief | nu
 }
 
 /**
- * COO: minimise delivery slip and line risk. Key: slip days, late orders, extra overtime, then
- * near-term (+7) and +30 coverage days of the affected material. Cash is outside the COO's scope.
+ * COO: protect delivery. Ranks by +30 delivery slip, late orders and extra overtime, then the
+ * affected material's coverage days at +7 and +30 (see rankCoo). Every ranking key of every option
+ * is cited. Cash is outside the COO's scope; riskLevel is not used (it includes cash factors).
  */
 export function cooBrief(s: CompanyState, decisionId: string): AdvisorBrief | null {
   const d = s.decisions.find((x) => x.id === decisionId);
   const impacts = decisionImpacts(s, decisionId);
   if (!d || !impacts) return null;
   const materialId = typeof d.situation.params.materialId === 'string' ? d.situation.params.materialId : null;
-  const ids = impacts.options.filter((o) => !o.error).map((o) => o.optionId);
   const cov = (h: HorizonImpact | undefined): number => (h && materialId ? (h.option.coverageDays[materialId] ?? 0) : 0);
-  const ranking = rank(ids, (id) => {
-    const h = at(impacts, id, 30);
-    if (!h) return [Infinity];
-    return [h.delta.deliverySlipDays, h.delta.lateOrders, h.delta.overtimeHours > 0 ? 1 : 0, -cov(at(impacts, id, 7)), -cov(h)];
-  });
+  const rows: CooRow[] = [];
+  for (const o of impacts.options) {
+    const h = o.error ? undefined : at(impacts, o.optionId, 30);
+    if (!h) continue;
+    rows.push({
+      optionId: o.optionId,
+      deliverySlipDays: h.delta.deliverySlipDays,
+      lateOrders: h.delta.lateOrders,
+      overtimeHours: h.delta.overtimeHours,
+      coverage7: cov(at(impacts, o.optionId, 7)),
+      coverage30: cov(h),
+    });
+  }
+  const ranking = rankCoo(rows);
   const best = ranking[0]?.optionId ?? d.defaultOptionId;
   const b30 = at(impacts, best, 30);
   const sel = `selectDecision(${decisionId})`;
   const citations: Citation[] = [];
-  for (const id of ids) {
-    const h = at(impacts, id, 30);
-    if (!h) continue;
-    citations.push({ selector: `${sel}.options[${id}].d30.delta.deliverySlipDays`, value: h.delta.deliverySlipDays });
-    if (materialId) citations.push({ selector: `${sel}.options[${id}].d7.option.coverageDays.${materialId}`, value: cov(at(impacts, id, 7)) });
+  for (const r of rows) {
+    const o = `${sel}.options[${r.optionId}]`;
+    citations.push({ selector: `${o}.d30.delta.deliverySlipDays`, value: r.deliverySlipDays });
+    citations.push({ selector: `${o}.d30.delta.lateOrders`, value: r.lateOrders });
+    citations.push({ selector: `${o}.d30.delta.overtimeHours`, value: r.overtimeHours });
+    if (materialId) {
+      citations.push({ selector: `${o}.d7.option.coverageDays.${materialId}`, value: r.coverage7 });
+      citations.push({ selector: `${o}.d30.option.coverageDays.${materialId}`, value: r.coverage30 });
+    }
   }
-  // riskLevel is not cited: it is a company-wide score that includes cash factors (CFO scope).
-  if (b30) citations.push({ selector: `${sel}.options[${best}].d30.delta.overtimeHours`, value: b30.delta.overtimeHours });
   const opt = d.options.find((o) => o.id === best);
   return {
     role: 'coo',

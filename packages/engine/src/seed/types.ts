@@ -20,6 +20,9 @@ import type {
 } from '../model/types';
 import type { Money } from '../model/units';
 
+/** A seed sales order; `listUnitPrice` defaults to `unitPrice` when the opening state is built. */
+export type SeedOrder = Omit<Order, 'listUnitPrice'> & { listUnitPrice?: Money };
+
 /** One JSON file per key in data/seed/. */
 export interface SeedBundle {
   company: { company: Company; settings: Settings };
@@ -29,7 +32,7 @@ export interface SeedBundle {
   materials: Material[];
   suppliers: Supplier[];
   customers: Customer[];
-  orders: { salesOrders: Order[]; purchaseOrders: PurchaseOrder[] };
+  orders: { salesOrders: SeedOrder[]; purchaseOrders: PurchaseOrder[] };
   workforce: WorkforceRow[];
   finance: {
     workspaceId: WorkspaceId;

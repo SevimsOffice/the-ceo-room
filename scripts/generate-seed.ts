@@ -11,7 +11,7 @@ import {
   type Department,
   type EventCard,
   type Material,
-  type Order,
+  type SeedOrder,
   type Payable,
   type PeriodClose,
   type PurchaseOrder,
@@ -195,7 +195,7 @@ const ORDERS: [string, string, string, number, number, number, number][] = [
   ['cus_tunca', 'drives', 'plant_inegol', 210, -3, 62, 0],
 ];
 const mpuOf = (fam: string): number => productFamilies.find((f) => f.id === fam)!.minutesPerUnit;
-const salesOrders: Order[] = ORDERS.map(([cus, fam, plant, qty, received, promised, pct], i) => {
+const salesOrders: SeedOrder[] = ORDERS.map(([cus, fam, plant, qty, received, promised, pct], i) => {
   const minutes = Math.floor((qty * mpuOf(fam) * pct) / 100);
   const unitsDone = Math.floor(minutes / mpuOf(fam));
   const famRec = productFamilies.find((f) => f.id === fam)!;

@@ -1,6 +1,7 @@
 import type { CompanyState } from '../model/types';
 import type { Bps, Money, Score } from '../model/units';
 import { money } from '../model/units';
+import { deepFreeze } from '../model/freeze';
 import type { CommandError } from '../commands/types';
 import type { RiskLevel } from '../rules/risk';
 import { type KpiSnapshot, projectState } from './project';
@@ -58,7 +59,7 @@ const cache = new WeakMap<CompanyState, Map<string, DecisionImpacts>>();
 
 /**
  * Impact preview: each option = project([approveOption], H) vs baseline project([], H), using the
- * same engine code path as the real run (ADR-0002). Memoised per state object (states are immutable).
+ * same engine code path as the real run (ADR-0002). Memoised per state object (states are immutable); the result is deep-frozen.
  */
 export function decisionImpacts(state: CompanyState, decisionId: string, horizons: number[] = [7, 30]): DecisionImpacts | null {
   const key = `${decisionId}:${horizons.join(',')}`;
@@ -95,7 +96,8 @@ export function decisionImpacts(state: CompanyState, decisionId: string, horizon
     baseline: horizons.map((h) => ({ horizonDays: h, kpis: baseAt(h) })),
     options,
   };
-  perState.set(key, result);
+  // Cached and shared between callers: frozen so no caller can alter what the next one reads.
+  perState.set(key, deepFreeze(result));
   cache.set(state, perState);
   return result;
 }

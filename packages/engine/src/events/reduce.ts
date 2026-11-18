@@ -6,6 +6,12 @@ interface HasId {
   id: string;
 }
 
+/**
+ * Records entering state from an event payload are stored as copies, so later events never mutate
+ * what the ledger recorded (and the ledger never aliases live state).
+ */
+const copy = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
+
 export function byId<T extends HasId>(arr: readonly T[], id: string): T {
   const x = arr.find((a) => a.id === id);
   if (!x) throw new InvariantError(`unknown id ${id}`);
@@ -29,10 +35,10 @@ export function applyEvent(s: CompanyState, e: GameEvent): void {
       s.dayAcc = { revenue: money(0), cogs: money(0), overtimePersonHours: 0, productionMinutes: 0 };
       return;
     case 'PeriodClosed':
-      s.periods.push(e.payload.close);
+      s.periods.push(copy(e.payload.close));
       return;
     case 'DailyKpiRecorded':
-      s.daily.push(e.payload.kpi);
+      s.daily.push(copy(e.payload.kpi));
       return;
     case 'RngAdvanced':
       for (const [k, v] of Object.entries(e.payload.streams)) {
@@ -40,7 +46,7 @@ export function applyEvent(s: CompanyState, e: GameEvent): void {
       }
       return;
     case 'DevelopmentArrived':
-      s.developments.push(e.payload.development);
+      s.developments.push(copy(e.payload.development));
       s.counters.development++;
       if (!s.firedCards.includes(e.payload.development.cardId)) s.firedCards.push(e.payload.development.cardId);
       return;
@@ -51,22 +57,24 @@ export function applyEvent(s: CompanyState, e: GameEvent): void {
       byId(s.developments, e.payload.developmentId).status = 'resolved';
       return;
     case 'DecisionOpened':
-      s.decisions.push(e.payload.decision);
+      s.decisions.push(copy(e.payload.decision));
       s.counters.decision++;
       return;
     case 'DecisionResolved': {
       const d = byId(s.decisions, e.payload.decisionId);
       d.status = e.payload.status;
       d.chosenOptionId = e.payload.optionId;
-      d.custom = e.payload.custom;
+      d.custom = copy(e.payload.custom);
       d.decidedDay = e.day;
       return;
     }
+    case 'DecisionDefaultFailed':
+      return;
     case 'AnalysisRequested':
       byId(s.decisions, e.payload.decisionId).analysis = { requestedDay: e.day, readyDay: e.payload.readyDay };
       return;
     case 'OrderReceived':
-      s.orders.push(e.payload.order);
+      s.orders.push(copy(e.payload.order));
       s.counters.order++;
       return;
     case 'OrderPlanned': {
@@ -74,7 +82,7 @@ export function applyEvent(s: CompanyState, e: GameEvent): void {
       o.plantId = e.payload.plantId;
       o.promisedDay = e.payload.promisedDay;
       o.costEstimate = e.payload.costEstimate;
-      o.plan = e.payload.plan;
+      o.plan = copy(e.payload.plan);
       o.status = 'scheduled';
       return;
     }
@@ -83,6 +91,7 @@ export function applyEvent(s: CompanyState, e: GameEvent): void {
       return;
     case 'OrderRepriced': {
       const o = byId(s.orders, e.payload.orderId);
+      o.listUnitPrice = e.payload.listUnitPrice;
       o.unitPrice = e.payload.unitPrice;
       o.value = e.payload.value;
       return;
@@ -100,7 +109,7 @@ export function applyEvent(s: CompanyState, e: GameEvent): void {
       byId(s.orders, e.payload.orderId).status = 'paid';
       return;
     case 'PurchaseOrderPlaced':
-      s.purchaseOrders.push(e.payload.po);
+      s.purchaseOrders.push(copy(e.payload.po));
       s.counters.po++;
       return;
     case 'PurchaseOrderRepriced':
@@ -124,7 +133,7 @@ export function applyEvent(s: CompanyState, e: GameEvent): void {
       return;
     }
     case 'PayableCreated':
-      s.payables.push(e.payload.payable);
+      s.payables.push(copy(e.payload.payable));
       s.counters.payable++;
       return;
     case 'PayableSettled': {
@@ -134,8 +143,17 @@ export function applyEvent(s: CompanyState, e: GameEvent): void {
       s.cash = subM(s.cash, e.payload.amount);
       return;
     }
+    case 'PayableCancelled': {
+      const p = byId(s.payables, e.payload.payableId);
+      if (p.status !== 'open') throw new InvariantError(`payable ${p.id} cancelled while ${p.status}`);
+      p.status = 'cancelled';
+      return;
+    }
+    case 'DepositForfeited':
+      if (byId(s.payables, e.payload.payableId).status !== 'settled') throw new InvariantError(`deposit ${e.payload.payableId} forfeited but not paid`);
+      return;
     case 'ReceivableCreated':
-      s.receivables.push(e.payload.receivable);
+      s.receivables.push(copy(e.payload.receivable));
       s.counters.receivable++;
       return;
     case 'ReceivableCollected': {

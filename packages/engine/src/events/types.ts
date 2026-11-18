@@ -15,7 +15,7 @@ import type {
   WorkspaceId,
 } from '../model/types';
 import type { StreamName } from '../rng/rng';
-import type { OperationalCommand } from '../commands/types';
+import type { CeoCommand, CommandError } from '../commands/types';
 
 /** Why an event happened (ADR-0005). */
 export type Cause =
@@ -38,13 +38,15 @@ export interface EventPayloads {
     decisionId: string;
     status: Exclude<DecisionStatus, 'open'>;
     optionId: string | null;
-    custom: OperationalCommand[] | null;
+    custom: CeoCommand[] | null;
   };
+  /** the default option failed validation at the deadline; the decision expires with no action */
+  DecisionDefaultFailed: { decisionId: string; optionId: string; error: CommandError };
   AnalysisRequested: { decisionId: string; readyDay: SimDay };
   OrderReceived: { order: Order };
   OrderPlanned: { orderId: string; plantId: string; promisedDay: SimDay; costEstimate: Money; plan: OrderPlan };
   OrderRecosted: { orderId: string; costEstimate: Money };
-  OrderRepriced: { orderId: string; unitPrice: Money; value: Money };
+  OrderRepriced: { orderId: string; listUnitPrice: Money; unitPrice: Money; value: Money };
   OrderShipped: { orderId: string; lateDays: number; revenue: Money; cogs: Money };
   OrderPaid: { orderId: string };
   PurchaseOrderPlaced: { po: PurchaseOrder };
@@ -54,6 +56,10 @@ export interface EventPayloads {
   PurchaseOrderDelivered: { poId: string; qty: number; value: Money };
   PayableCreated: { payable: Payable };
   PayableSettled: { payableId: string; amount: Money };
+  /** an open payable that will never be paid (deposit of a PO cancelled before it was paid) */
+  PayableCancelled: { payableId: string; amount: Money };
+  /** a deposit already paid on a cancelled PO is lost (ADR-0007); no cash moves, the loss is recorded */
+  DepositForfeited: { poId: string; payableId: string; supplierId: string; amount: Money };
   ReceivableCreated: { receivable: Receivable };
   ReceivableCollected: { receivableId: string; amount: Money };
   ReceivableDelayed: { receivableId: string; expectedPayDay: SimDay };

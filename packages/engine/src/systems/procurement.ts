@@ -2,7 +2,7 @@ import type { PurchaseOrder } from '../model/types';
 import { type Money, mulBps, subM, timesQty } from '../model/units';
 import { byId } from '../events/reduce';
 import { type Tx, rule, fromEvent } from '../events/tx';
-import type { Cause } from '../events/types';
+import type { Cause, EventOf } from '../events/types';
 import { chanceBps, intBelow } from '../rng/rng';
 import { allocatedQty, inboundQty, offerOf, orderCostEstimate } from './costing';
 import { openOrders } from './capacity';
@@ -191,6 +191,27 @@ export function changeSupplierPrice(
   recostOpenOrders(tx, fromEvent(ev));
 }
 
+/**
+ * Cancel an open PO. Its deposit, if not yet paid, is cancelled with it; if already paid it is
+ * forfeited (ADR-0007): no cash moves, but the loss is a ledger event caused by the cancellation.
+ */
+export function cancelPurchaseOrder(tx: Tx, po: PurchaseOrder, cause: Cause): EventOf<'PurchaseOrderCancelled'> {
+  const c = tx.emit('PurchaseOrderCancelled', { poId: po.id }, cause, { poId: po.id, supplierId: po.supplierId });
+  for (const p of tx.s.payables) {
+    if (p.source !== 'po_deposit' || p.poId !== po.id) continue;
+    if (p.status === 'open') {
+      tx.emit('PayableCancelled', { payableId: p.id, amount: p.amount }, fromEvent(c), { payableId: p.id, poId: po.id, amount: p.amount });
+    } else if (p.status === 'settled') {
+      tx.emit('DepositForfeited', { poId: po.id, payableId: p.id, supplierId: po.supplierId, amount: p.amount }, fromEvent(c), {
+        poId: po.id,
+        supplierId: po.supplierId,
+        amount: p.amount,
+      });
+    }
+  }
+  return c;
+}
+
 /** Switch preferred supplier; cancel not-yet-shipped POs at the old one and re-place them. */
 export function switchSupplier(tx: Tx, materialId: string, toSupplierId: string, cause: Cause): void {
   const s = tx.s;
@@ -206,7 +227,7 @@ export function switchSupplier(tx: Tx, materialId: string, toSupplierId: string,
     (p) => p.status === 'open' && p.materialId === materialId && p.supplierId === prev && p.dueDay > s.day + IN_TRANSIT_DAYS,
   );
   for (const po of toCancel) {
-    const c = tx.emit('PurchaseOrderCancelled', { poId: po.id }, fromEvent(ev), { poId: po.id, supplierId: prev });
+    const c = cancelPurchaseOrder(tx, po, fromEvent(ev));
     placePurchaseOrder(tx, { supplierId: toSupplierId, materialId, qty: po.qty, forOrderId: po.forOrderId }, fromEvent(c));
   }
   recostOpenOrders(tx, fromEvent(ev));

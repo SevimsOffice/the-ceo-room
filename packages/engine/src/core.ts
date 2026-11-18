@@ -13,6 +13,10 @@ export type CommandOutcome =
   | { ok: false; error: CommandError };
 
 export function applyCommand(state: CompanyState, cmd: Command): CommandOutcome {
+  const raw: unknown = cmd;
+  if (typeof raw !== 'object' || raw === null || typeof (raw as { type?: unknown }).type !== 'string') {
+    return { ok: false, error: { code: 'error.invalidCommand', params: {} } };
+  }
   const tx = new Tx(state);
   const commandId = `cmd-${String(tx.s.nextCommandSeq).padStart(4, '0')}`;
   const cause = fromCommand(commandId);

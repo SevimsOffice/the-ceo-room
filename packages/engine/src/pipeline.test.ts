@@ -6,11 +6,22 @@
  */
 import { describe, expect, it } from 'vitest';
 import { checkInvariants } from '../test/invariants';
-import { STEEL_DECISION, day1State, engineAt, seedWithout } from '../test/seedFixture';
-import { TINY_WS, tinyWithOrder } from '../test/tinySeed';
-import { type CompanyState, type Engine, type GameEvent, metrics, selectMorningReport, selectOrderImpact, tl } from './index';
+import { STEEL_DECISION, WS, day1State, engineAt, seedWithout } from '../test/seedFixture';
+import { TINY_WS, card, tinyWithOrder } from '../test/tinySeed';
+import { type CardEffect, type CompanyState, type Engine, type GameEvent, metrics, selectMorningReport, selectOrderImpact, tl } from './index';
 
 const ORDER = 'ord-0001';
+/** s1 doubles the m1 price (10 → 20 TRY); the decision it opens is left to expire (absorb). */
+const PRICE_DOUBLES: CardEffect = {
+  kind: 'supplierPriceChange',
+  supplierId: 's1',
+  materialId: 'm1',
+  changeBps: 10000,
+  decisionDays: 60,
+  negotiation: { settleBps: 5000, volumeQty: 10 },
+  alternativeSupplierId: 's2',
+  customerReaction: { satisfactionDelta: -100, churnRiskDelta: 100, paymentDelayDays: 0 },
+};
 const ofType = <T extends GameEvent['type']>(l: readonly GameEvent[], t: T): Extract<GameEvent, { type: T }>[] =>
   l.filter((e): e is Extract<GameEvent, { type: T }> => e.type === t);
 const order = (s: Readonly<CompanyState>, id = ORDER) => {
@@ -94,8 +105,9 @@ describe('order pipeline on a tiny company (hand-computed)', () => {
 
   it('supplier price → order cost and margin → PO price → cash', () => {
     const base = tinyWithOrder();
-    const e = tinyWithOrder();
-    expect(e.dispatch({ type: 'setSupplierPrice', supplierId: 's1', materialId: 'm1', unitPrice: tl(20) }).ok).toBe(true);
+    // setSupplierPrice is engine-only: the price rise arrives the way it does in play, as a supplier card
+    const e = tinyWithOrder((s) => s.eventCards.push(card('card_price', { kind: 'day', day: 1 }, PRICE_DOUBLES)));
+    expect(e.state().suppliers.find((x) => x.id === 's1')?.offers[0]?.unitPrice).toBe(tl(20));
     expect(order(e.state()).costEstimate).toBe(tl(2080) + 32 * tl(10));
     expect(selectOrderImpact(e.state(), ORDER)?.marginBps).toBe(8500);
     expect(e.state().purchaseOrders[0]?.unitPrice).toBe(tl(20));
@@ -232,5 +244,87 @@ describe('propagation on the real seed', () => {
     for (const c of sa.customers) expect(c.satisfaction, c.id).toBeLessThanOrEqual(sb.customers.find((x) => x.id === c.id)?.satisfaction ?? NaN);
     expect(selectMorningReport(sa).satisfaction.average).toBeLessThan(selectMorningReport(sb).satisfaction.average);
     expect(sa.decisions.find((d) => d.id === STEEL_DECISION)?.status).toBe('expired');
+  });
+});
+
+describe('cancelled purchase orders and their deposits (review fix 2)', () => {
+  /** Every deposit of a cancelled PO is either cancelled unpaid or explicitly forfeited, never silently lost. */
+  const depositsOfCancelled = (e: Engine) => {
+    const s = e.state();
+    const l = e.ledger();
+    const cancelled = s.purchaseOrders.filter((p) => p.status === 'cancelled');
+    const rows = cancelled.flatMap((po) => s.payables.filter((p) => p.source === 'po_deposit' && p.poId === po.id).map((p) => ({ po, p })));
+    for (const { po, p } of rows) {
+      const cancelEv = ofType(l, 'PurchaseOrderCancelled').filter((x) => x.payload.poId === po.id);
+      expect(cancelEv, po.id).toHaveLength(1);
+      const byCancel = l.filter((x) => x.cause.kind === 'event' && x.cause.seq === cancelEv[0]?.seq);
+      const unpaid = ofType(l, 'PayableCancelled').filter((x) => x.payload.payableId === p.id);
+      const lost = ofType(l, 'DepositForfeited').filter((x) => x.payload.payableId === p.id);
+      if (p.status === 'cancelled') {
+        expect(unpaid, p.id).toHaveLength(1);
+        expect(lost, p.id).toHaveLength(0);
+        expect(ofType(l, 'PayableSettled').some((x) => x.payload.payableId === p.id), p.id).toBe(false);
+        expect(byCancel).toContain(unpaid[0]);
+      } else {
+        expect(p.status, p.id).toBe('settled');
+        expect(lost, p.id).toHaveLength(1);
+        expect(lost[0]?.payload).toEqual({ poId: po.id, payableId: p.id, supplierId: po.supplierId, amount: p.amount });
+        expect(lost[0]?.params).toMatchObject({ poId: po.id, amount: p.amount });
+        expect(byCancel).toContain(lost[0]);
+      }
+    }
+    return rows;
+  };
+
+  it('probe: switch, advance 3 days, switch back: every paid deposit is forfeited in the ledger', () => {
+    const e = engineAt();
+    expect(e.dispatch({ type: 'switchSupplier', materialId: 'steel', toSupplierId: 'sup_dogumetal' }).ok).toBe(true);
+    e.advance(3);
+    expect(e.dispatch({ type: 'switchSupplier', materialId: 'steel', toSupplierId: 'sup_kuzeycelik' }).ok).toBe(true);
+    const rows = depositsOfCancelled(e);
+    const forfeited = ofType(e.ledger(), 'DepositForfeited');
+    expect(forfeited.length).toBeGreaterThan(0);
+    expect(forfeited.reduce((t, x) => t + x.payload.amount, 0)).toBe(rows.filter((r) => r.p.status === 'settled').reduce((t, r) => t + r.p.amount, 0));
+    expect(checkInvariants(e.state(), e.ledger(), WS)).toEqual([]);
+    e.advance(5);
+    expect(checkInvariants(e.state(), e.ledger(), WS)).toEqual([]);
+  });
+
+  it('a same-morning switch and switch back charges no deposit for the cancelled POs', () => {
+    const base = engineAt();
+    const e = engineAt();
+    expect(e.dispatch({ type: 'switchSupplier', materialId: 'steel', toSupplierId: 'sup_dogumetal' }).ok).toBe(true);
+    const deposits = e.state().payables.filter((p) => p.source === 'po_deposit' && p.status === 'open');
+    expect(deposits.length).toBeGreaterThan(0);
+    expect(e.dispatch({ type: 'switchSupplier', materialId: 'steel', toSupplierId: 'sup_kuzeycelik' }).ok).toBe(true);
+    for (const p of deposits) expect(e.state().payables.find((x) => x.id === p.id)?.status, p.id).toBe('cancelled');
+    const rows = depositsOfCancelled(e);
+    expect(rows.filter((r) => r.p.status === 'cancelled')).toHaveLength(deposits.length);
+    expect(ofType(e.ledger(), 'DepositForfeited')).toHaveLength(0);
+    e.advance(1);
+    base.advance(1);
+    expect(ofType(e.ledger(), 'PayableSettled').filter((x) => deposits.some((p) => p.id === x.payload.payableId))).toHaveLength(0);
+    expect(e.state().cash).toBe(base.state().cash);
+    expect(checkInvariants(e.state(), e.ledger(), WS)).toEqual([]);
+  });
+
+  it('tiny company: cancelling a PO whose deposit is open cancels the payable; once paid, it is forfeited', () => {
+    // s2 asks a 50% deposit. Switch to s2 (deposit due today), then back the same day: cancelled unpaid.
+    const same = tinyWithOrder();
+    expect(same.dispatch({ type: 'switchSupplier', materialId: 'm1', toSupplierId: 's2' }).ok).toBe(true);
+    expect(same.dispatch({ type: 'switchSupplier', materialId: 'm1', toSupplierId: 's1' }).ok).toBe(true);
+    expect(same.state().payables).toEqual([expect.objectContaining({ source: 'po_deposit', amount: tl(180), status: 'cancelled' })]);
+    const opening = same.state().cash;
+    runTo(same, 2);
+    expect(same.state().cash).toBe(opening);
+    // switch back a day later: the 180 TRY deposit was paid on Day 1 evening and is forfeited
+    const late = tinyWithOrder();
+    expect(late.dispatch({ type: 'switchSupplier', materialId: 'm1', toSupplierId: 's2' }).ok).toBe(true);
+    runTo(late, 2);
+    expect(late.dispatch({ type: 'switchSupplier', materialId: 'm1', toSupplierId: 's1' }).ok).toBe(true);
+    const lost = ofType(late.ledger(), 'DepositForfeited');
+    expect(lost.map((x) => [x.day, x.payload.supplierId, x.payload.amount])).toEqual([[2, 's2', tl(180)]]);
+    expect(late.state().cash).toBe(opening - tl(180));
+    expect(checkInvariants(late.state(), late.ledger(), TINY_WS)).toEqual([]);
   });
 });

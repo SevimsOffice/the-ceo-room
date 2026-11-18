@@ -1,5 +1,5 @@
 import { type Tx, rule } from '../events/tx';
-import { resolveDecision } from '../commands/handle';
+import { expireDecision } from '../commands/handle';
 import { runCards } from '../rules/cards';
 import { isPeriodStart, periodOf } from './calendar';
 import { runCash } from './cash';
@@ -31,8 +31,7 @@ export function openDay(tx: Tx, day: number): void {
   }
   for (const d of s.decisions) {
     if (d.status !== 'open' || d.deadlineDay > day) continue;
-    const opt = d.options.find((o) => o.id === d.defaultOptionId);
-    resolveDecision(tx, d, 'expired', d.defaultOptionId, opt ? opt.commands : [], null, rule('rule.decision.deadline'));
+    expireDecision(tx, d, rule('rule.decision.deadline'));
   }
   runCards(tx);
   runDemand(tx);

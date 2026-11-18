@@ -1,6 +1,6 @@
 import type { Bps, Money, Score, SimDay } from './units';
 import type { StreamName } from '../rng/rng';
-import type { OperationalCommand } from '../commands/types';
+import type { CeoCommand, OperationalCommand } from '../commands/types';
 
 /** i18n message: the engine emits codes + params, never sentences. */
 export type I18nParams = Record<string, string | number | boolean>;
@@ -216,6 +216,9 @@ export interface Order {
   familyId: string;
   plantId: string;
   qty: number;
+  /** price before the customer's discount (list or agreed price, plus any cost passed on) */
+  listUnitPrice: Money;
+  /** price charged = listUnitPrice less the customer's discount where one was applied */
   unitPrice: Money;
   value: Money;
   paymentTermsDays: number;
@@ -273,7 +276,8 @@ export interface Payable {
   counterpartyId: string;
   amount: Money;
   dueDay: SimDay;
-  status: 'open' | 'settled';
+  /** cancelled = never paid (e.g. the deposit of a PO cancelled before its due day) */
+  status: 'open' | 'settled' | 'cancelled';
 }
 
 export interface RecurringCost {
@@ -369,6 +373,33 @@ export interface DecisionOption {
 
 export type DecisionStatus = 'open' | 'approved' | 'rejected' | 'expired';
 
+export interface CustomerReactionRule {
+  satisfactionDelta: Score;
+  churnRiskDelta: Bps;
+}
+
+/**
+ * Engine-owned facts a decision's commands are derived from, captured when it opens (so commands
+ * replay identically). CEO commands carry intent; prices and reactions come from here.
+ */
+export type DecisionBasis =
+  | {
+      kind: 'supplierPrice';
+      supplierId: string;
+      materialId: string;
+      previousPrice: Money;
+      newPrice: Money;
+      /** reaction of each customer whose orders carry the full rise; scaled by the pass-through share */
+      customerReaction: CustomerReactionRule & { paymentDelayDays: number };
+    }
+  | {
+      kind: 'discountDemand';
+      customerId: string;
+      discountBps: Bps;
+      acceptance: CustomerReactionRule;
+      refusal: CustomerReactionRule;
+    };
+
 export interface Decision {
   workspaceId: WorkspaceId;
   id: string;
@@ -380,11 +411,12 @@ export interface Decision {
   openedDay: SimDay;
   deadlineDay: SimDay;
   defaultOptionId: string;
+  basis: DecisionBasis;
   options: DecisionOption[];
   chosenOptionId: string | null;
   decidedDay: SimDay | null;
   analysis: { requestedDay: SimDay; readyDay: SimDay } | null;
-  custom: OperationalCommand[] | null;
+  custom: CeoCommand[] | null;
 }
 
 export interface Counters {

@@ -4,7 +4,20 @@
  */
 import { describe, expect, it } from 'vitest';
 import { STEEL_DECISION, engineAt } from '../test/seedFixture';
-import { type Command, type CompanyState, type Engine, type GameEvent, mulBps, selectDecision, selectMorningReport, stateHash } from './index';
+import {
+  type Command,
+  type CompanyState,
+  type Engine,
+  type GameEvent,
+  type Money,
+  type OperationalCommand,
+  advanceState,
+  mulBps,
+  selectDecision,
+  selectMorningReport,
+  stateHash,
+} from './index';
+import { cloneState } from './events/tx';
 
 type Path = 'none' | 'absorb' | 'reject' | 'negotiate' | 'switch' | 'passOn' | 'custom';
 const PATHS: readonly Path[] = ['none', 'absorb', 'reject', 'negotiate', 'switch', 'passOn', 'custom'];
@@ -256,5 +269,89 @@ describe('discount demand (Day 9): grant, refuse and expiry', () => {
       return stateHash(e.state());
     };
     expect(new Set([final('grant'), final('refuse'), final(null)]).size).toBe(3);
+  });
+});
+
+describe('discounts reprice from the pre-discount price (review fix 5)', () => {
+  it('granting 800 bps twice leaves open orders at 8% off, the same price a new order gets', () => {
+    const e = engineAt();
+    e.advance(8);
+    const d = e.state().decisions.find((x) => x.id === 'dec-0002');
+    if (d?.basis.kind !== 'discountDemand') throw new Error('discount basis');
+    const { customerId, discountBps } = d.basis;
+    expect(discountBps).toBe(800);
+    const isOpen = (o: { status: string }): boolean => ['registered', 'scheduled', 'in_production'].includes(o.status);
+    const open = e.state().orders.filter((o) => o.customerId === customerId && isOpen(o));
+    expect(open.length).toBeGreaterThan(0);
+    expect(e.dispatch({ type: 'approveOption', decisionId: 'dec-0002', optionId: 'grant' }).ok).toBe(true);
+    const satAfterFirst = e.state().customers.find((c) => c.id === customerId)?.satisfaction;
+    expect(e.dispatch({ type: 'grantDiscount', customerId, discountBps }).ok).toBe(true);
+    const listOf = (familyId: string): Money => {
+      const f = e.state().productFamilies.find((x) => x.id === familyId);
+      if (!f) throw new Error(familyId);
+      return f.unitPrice;
+    };
+    for (const o of open) {
+      const now = e.state().orders.find((x) => x.id === o.id);
+      expect(now?.listUnitPrice).toBe(o.listUnitPrice);
+      expect(now?.unitPrice, o.id).toBe(o.listUnitPrice - mulBps(o.listUnitPrice, 800));
+      // seed and demand orders are at list price: exactly what systems/demand.ts charges a new order
+      expect(now?.unitPrice).toBe(listOf(o.familyId) - mulBps(listOf(o.familyId), 800));
+    }
+    // the second, identical grant is not a further concession: no extra goodwill
+    expect(e.state().customers.find((c) => c.id === customerId)?.satisfaction).toBe(satAfterFirst);
+    // the customer's next order (its cadence) arrives at the same price as the repriced ones
+    const known = new Set(e.state().orders.map((o) => o.id));
+    e.advance(10);
+    const fresh = e.state().orders.filter((o) => o.customerId === customerId && !known.has(o.id));
+    expect(fresh.length).toBeGreaterThan(0);
+    for (const o of fresh) {
+      expect(o.listUnitPrice).toBe(listOf(o.familyId));
+      expect(o.unitPrice).toBe(listOf(o.familyId) - mulBps(listOf(o.familyId), 800));
+      const repriced = open.find((x) => x.familyId === o.familyId);
+      if (repriced) expect(o.unitPrice).toBe(e.state().orders.find((x) => x.id === repriced.id)?.unitPrice);
+    }
+  });
+});
+
+describe('deadline expiry validates the default option (review fix 8)', () => {
+  /** Day-1 state whose steel default option ('absorb') holds a command that is not valid. */
+  const withInvalidDefault = (bad: OperationalCommand): CompanyState => {
+    const s = cloneState(engineAt().state()) as CompanyState;
+    const d = s.decisions.find((x) => x.id === STEEL_DECISION);
+    const absorb = d?.options.find((o) => o.id === d.defaultOptionId);
+    if (!absorb) throw new Error('default option');
+    absorb.commands = [bad];
+    return s;
+  };
+
+  it.each([
+    [{ type: 'placePurchaseOrder', supplierId: 'sup_nobody', materialId: 'steel', qty: 1000 } as OperationalCommand, 'error.unknownSupplier'],
+    [{ type: 'placePurchaseOrder', supplierId: 'sup_kuzeycelik', materialId: 'steel', qty: 1.5 } as OperationalCommand, 'error.invalidAmount'],
+    [{ type: 'switchSupplier', materialId: 'steel', toSupplierId: 'sup_kuzeycelik' } as OperationalCommand, 'error.alreadyPreferred'],
+  ])('%j: expires with no action and ledgers the reason', (bad, code) => {
+    const start = withInvalidDefault(bad);
+    const r = advanceState(start, 7);
+    const s = r.state;
+    expect(s.day).toBe(8);
+    const d = s.decisions.find((x) => x.id === STEEL_DECISION);
+    expect(d?.status).toBe('expired');
+    expect(d?.chosenOptionId).toBeNull();
+    expect(s.developments.find((x) => x.id === d?.developmentId)?.status).toBe('resolved');
+    const failed = r.events.filter((x) => x.type === 'DecisionDefaultFailed');
+    expect(failed).toHaveLength(1);
+    const f = failed[0];
+    if (f?.type !== 'DecisionDefaultFailed') throw new Error('no failure event');
+    expect(f.day).toBe(8);
+    expect(f.cause).toEqual({ kind: 'rule', ruleId: 'rule.decision.deadline' });
+    expect(f.payload).toMatchObject({ decisionId: STEEL_DECISION, optionId: 'absorb', error: { code } });
+    expect(f.params.reason).toBe(code);
+    const resolved = r.events.filter((x) => x.type === 'DecisionResolved');
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0]?.cause).toEqual({ kind: 'event', seq: f.seq });
+    // nothing from the invalid command ran: the resolution caused only the development's resolution
+    expect(r.events.filter((x) => x.cause.kind === 'event' && x.cause.seq === resolved[0]?.seq).map((x) => x.type)).toEqual(['DevelopmentResolved']);
+    expect(s.materials.find((m) => m.id === 'steel')?.preferredSupplierId).toBe('sup_kuzeycelik');
+    expect(s.purchaseOrders.some((p) => p.supplierId === 'sup_nobody' || p.qty === 1.5)).toBe(false);
   });
 });

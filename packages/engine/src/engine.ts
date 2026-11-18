@@ -3,6 +3,7 @@ import type { Command, DispatchResult } from './commands/types';
 import { advanceState, applyCommand } from './core';
 import type { GameEvent } from './events/types';
 import { fnv1a } from './rng/rng';
+import { deepFreeze } from './model/freeze';
 import { type ProjectionResult, projectState } from './projection/project';
 import { type EngineOptions, bootstrap } from './seed/init';
 import type { SeedBundle } from './seed/types';
@@ -29,16 +30,22 @@ export interface Engine {
 
 export function createEngine(seed: SeedBundle, opts: EngineOptions): Engine {
   const boot = bootstrap(seed, opts);
-  let current = boot.state;
-  const ledger: GameEvent[] = [...boot.events];
+  // Committed state and events are deep-frozen: callers read them, only transactions change them.
+  let current = deepFreeze(boot.state);
+  const ledger: GameEvent[] = [...deepFreeze(boot.events)];
+  let ledgerView: readonly GameEvent[] | null = null;
   const log: LogEntry[] = [];
+  const commit = (state: CompanyState, events: GameEvent[]): void => {
+    current = deepFreeze(state);
+    ledger.push(...deepFreeze(events));
+    ledgerView = null;
+  };
   return {
     state: () => current,
     dispatch(cmd) {
       const r = applyCommand(current, cmd);
       if (!r.ok) return r;
-      current = r.state;
-      ledger.push(...r.events);
+      commit(r.state, r.events);
       log.push({ kind: 'dispatch', command: JSON.parse(JSON.stringify(cmd)) as Command });
       return { ok: true, commandId: r.commandId, events: r.events };
     },
@@ -46,13 +53,12 @@ export function createEngine(seed: SeedBundle, opts: EngineOptions): Engine {
       const n = Math.max(0, Math.floor(days));
       if (n === 0) return [];
       const r = advanceState(current, n);
-      current = r.state;
-      ledger.push(...r.events);
+      commit(r.state, r.events);
       log.push({ kind: 'advance', days: n });
       return r.events;
     },
     project: (cmds, days, checkpoints) => projectState(current, cmds, days, checkpoints),
-    ledger: () => ledger,
+    ledger: () => (ledgerView ??= Object.freeze([...ledger])),
     snapshot: () => ({
       format: 1,
       seedVersion: current.seedVersion,

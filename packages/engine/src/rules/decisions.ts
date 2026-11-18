@@ -1,5 +1,5 @@
 import type { CardEffect, CompanyState, Decision, EventCard } from '../model/types';
-import { type Money, addM, mulBps, subM } from '../model/units';
+import { type Money, addM, mulBps } from '../model/units';
 import { byId } from '../events/reduce';
 import { offerOf } from '../systems/costing';
 import { pad } from '../systems/procurement';
@@ -40,6 +40,14 @@ export function buildSupplierPriceDecision(
     openedDay: s.day,
     deadlineDay: s.day + effect.decisionDays,
     defaultOptionId: 'absorb',
+    basis: {
+      kind: 'supplierPrice',
+      supplierId: supplier.id,
+      materialId: effect.materialId,
+      previousPrice,
+      newPrice,
+      customerReaction: { ...effect.customerReaction },
+    },
     options: [
       {
         id: 'absorb',
@@ -77,15 +85,7 @@ export function buildSupplierPriceDecision(
       {
         id: 'passOn',
         labelKey: 'option.supplierPrice.passOn',
-        commands: [
-          {
-            type: 'repriceOrders',
-            materialId: effect.materialId,
-            unitCostIncrease: subM(newPrice, previousPrice),
-            passThroughBps: 10000,
-            reaction: effect.customerReaction,
-          },
-        ],
+        commands: [{ type: 'repriceOrders', materialId: effect.materialId, passThroughBps: 10000 }],
         assumptions: [
           { code: 'assumption.fullPassThrough', params: { materialId: effect.materialId } },
           {
@@ -126,19 +126,18 @@ export function buildDiscountDecision(
     openedDay: s.day,
     deadlineDay: s.day + effect.decisionDays,
     defaultOptionId: 'refuse',
+    basis: {
+      kind: 'discountDemand',
+      customerId: effect.customerId,
+      discountBps: effect.discountBps,
+      acceptance: { ...effect.acceptance },
+      refusal: { ...effect.refusal },
+    },
     options: [
       {
         id: 'grant',
         labelKey: 'option.discount.grant',
-        commands: [
-          {
-            type: 'grantDiscount',
-            customerId: effect.customerId,
-            discountBps: effect.discountBps,
-            satisfactionDelta: effect.acceptance.satisfactionDelta,
-            churnRiskDelta: effect.acceptance.churnRiskDelta,
-          },
-        ],
+        commands: [{ type: 'grantDiscount', customerId: effect.customerId, discountBps: effect.discountBps }],
         assumptions: [{ code: 'assumption.discountOnOpenOrders', params: { discountBps: effect.discountBps } }],
       },
       {

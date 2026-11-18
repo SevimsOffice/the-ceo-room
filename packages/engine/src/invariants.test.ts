@@ -23,8 +23,8 @@ function steelCommand(path: Path): Command | null {
       type: 'customDecision',
       decisionId: STEEL_DECISION,
       commands: [
-        { type: 'setSupplierPrice', supplierId: 'sup_kuzeycelik', materialId: 'steel', unitPrice: tl(42) },
         { type: 'placePurchaseOrder', supplierId: 'sup_kuzeycelik', materialId: 'steel', qty: 150_000 },
+        { type: 'repriceOrders', materialId: 'steel', passThroughBps: 5000 },
       ],
     };
   }
@@ -159,7 +159,7 @@ describe('reducer guards (tiny state)', () => {
   it('consuming more stock than exists throws InvariantError', () => {
     const s = withMoney();
     s.orders.push({
-      workspaceId: TINY_WS, id: 'ord-1', customerId: 'c1', familyId: 'f1', plantId: 'p1', qty: 3, unitPrice: money(tl(1000)), value: money(tl(3000)), paymentTermsDays: 60,
+      workspaceId: TINY_WS, id: 'ord-1', customerId: 'c1', familyId: 'f1', plantId: 'p1', qty: 3, listUnitPrice: money(tl(1000)), unitPrice: money(tl(1000)), value: money(tl(3000)), paymentTermsDays: 60,
       receivedDay: 1, requestedDay: 10, promisedDay: 10, status: 'scheduled', minutesDone: 0, unitsDone: 0, materialCost: money(0), energyCost: money(0),
       costEstimate: money(0), blockedBy: null, shippedDay: null, source: 'seed', plan: null,
     });
@@ -208,5 +208,55 @@ describe('cash system (tiny state)', () => {
     expect(cashAfterDay[5]).toBe(opening - tl(70) - tl(100) + tl(250));
     expect(cashAfterDay[20]).toBe(opening - 3 * tl(70) - tl(100) + tl(250) - tl(11_000));
     expect(checkInvariants(e.state(), l, TINY_WS)).toEqual([]);
+  });
+});
+
+describe('the ledger records what happened, not live state (review fix 3)', () => {
+  /** Every object reachable from a value. */
+  const objects = (root: unknown, into = new Set<object>()): Set<object> => {
+    if (root !== null && typeof root === 'object' && !into.has(root)) {
+      into.add(root);
+      for (const v of Object.values(root)) objects(v, into);
+    }
+    return into;
+  };
+
+  it('Day 1: OrderReceived shows the order as received, although planning changed it in the same transaction', () => {
+    const e = engineAt();
+    const received = e.ledger().find((x) => x.type === 'OrderReceived' && x.payload.order.source === 'card');
+    if (received?.type !== 'OrderReceived') throw new Error('no card order');
+    const o = received.payload.order;
+    expect(o.status).toBe('registered');
+    expect(o.plan).toBeNull();
+    expect(o.costEstimate).toBe(0);
+    const live = e.state().orders.find((x) => x.id === o.id);
+    expect(live?.status).toBe('scheduled');
+    expect(live?.plan).not.toBeNull();
+    expect(live).not.toBe(o);
+  });
+
+  it('no ledger payload object is reference-equal to any object in state, and payloads never change afterwards', () => {
+    const e = engineAt();
+    const snap = (): string => JSON.stringify(e.ledger());
+    const steps: (() => void)[] = [
+      () => void e.dispatch({ type: 'approveOption', decisionId: STEEL_DECISION, optionId: 'switch' }),
+      () => void e.advance(8),
+      () => void e.dispatch({ type: 'customDecision', decisionId: 'dec-0002', commands: [{ type: 'grantDiscount', customerId: 'cus_velora', discountBps: 400 }] }),
+      () => void e.advance(5),
+    ];
+    for (const step of steps) {
+      const before = snap();
+      step();
+      expect(snap().startsWith(before.slice(0, -1))).toBe(true);
+    }
+    const inState = objects(e.state());
+    let checked = 0;
+    for (const ev of e.ledger()) {
+      for (const x of objects(ev.payload)) {
+        checked++;
+        if (inState.has(x)) throw new Error(`event #${ev.seq} ${ev.type} payload aliases live state`);
+      }
+    }
+    expect(checked).toBeGreaterThan(200);
   });
 });

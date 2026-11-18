@@ -1,6 +1,6 @@
 # ADR-0007: Milestone 1 engine refinements
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 
 ## Context

@@ -1,0 +1,144 @@
+[
+ {
+  "workspaceId": "ws_demo",
+  "id": "card_large_order",
+  "kindKey": "largeOrder",
+  "severity": "high",
+  "trigger": {
+   "kind": "day",
+   "day": 1
+  },
+  "effect": {
+   "kind": "largeOrder",
+   "customerId": "cus_demirhan",
+   "familyId": "frames",
+   "qty": 920,
+   "unitPrice": 2400000,
+   "requestedInDays": 45,
+   "paymentTermsDays": 90
+  }
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "card_steel_price",
+  "kindKey": "supplierPriceIncrease",
+  "severity": "high",
+  "trigger": {
+   "kind": "day",
+   "day": 1
+  },
+  "effect": {
+   "kind": "supplierPriceChange",
+   "supplierId": "sup_kuzeycelik",
+   "materialId": "steel",
+   "changeBps": 2000,
+   "decisionDays": 7,
+   "negotiation": {
+    "settleBps": 900,
+    "volumeQty": 500000
+   },
+   "alternativeSupplierId": "sup_dogumetal",
+   "customerReaction": {
+    "satisfactionDelta": -700,
+    "churnRiskDelta": 900,
+    "paymentDelayDays": 10
+   }
+  }
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "card_discount_demand",
+  "kindKey": "discountDemand",
+  "severity": "medium",
+  "trigger": {
+   "kind": "day",
+   "day": 9
+  },
+  "effect": {
+   "kind": "discountDemand",
+   "customerId": "cus_velora",
+   "discountBps": 800,
+   "decisionDays": 5,
+   "refusal": {
+    "satisfactionDelta": -600,
+    "churnRiskDelta": 800
+   },
+   "acceptance": {
+    "satisfactionDelta": 300,
+    "churnRiskDelta": -500
+   }
+  }
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "card_press_breakdown",
+  "kindKey": "machineBreakdown",
+  "severity": "high",
+  "trigger": {
+   "kind": "day",
+   "day": 16
+  },
+  "effect": {
+   "kind": "lineBreakdown",
+   "lineId": "p2_press",
+   "repairDays": 5
+  }
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "card_late_payment",
+  "kindKey": "latePayment",
+  "severity": "medium",
+  "trigger": {
+   "kind": "day",
+   "day": 22
+  },
+  "effect": {
+   "kind": "latePayment",
+   "customerId": "cus_karatas",
+   "delayDays": 21
+  }
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "card_export",
+  "kindKey": "exportOpportunity",
+  "severity": "low",
+  "trigger": {
+   "kind": "day",
+   "day": 40
+  },
+  "effect": {
+   "kind": "notice"
+  }
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "card_turnover",
+  "kindKey": "turnoverRising",
+  "severity": "medium",
+  "trigger": {
+   "kind": "turnoverAbove",
+   "departmentId": "operations",
+   "thresholdBps": 400,
+   "fromDay": 2
+  },
+  "effect": {
+   "kind": "notice"
+  }
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "card_cash_squeeze",
+  "kindKey": "cashSqueeze",
+  "severity": "high",
+  "trigger": {
+   "kind": "cashBelow",
+   "threshold": 500000000,
+   "fromDay": 2
+  },
+  "effect": {
+   "kind": "notice"
+  }
+ }
+]

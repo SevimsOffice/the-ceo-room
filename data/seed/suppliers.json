@@ -1,0 +1,116 @@
+[
+ {
+  "workspaceId": "ws_demo",
+  "id": "sup_kuzeycelik",
+  "name": "Kuzeyçelik Haddecilik A.Ş.",
+  "country": "TR",
+  "offers": [
+   {
+    "materialId": "steel",
+    "unitPrice": 3800,
+    "leadTimeDays": 7
+   }
+  ],
+  "paymentTermsDays": 21,
+  "depositBps": 0,
+  "reliabilityBps": 9600,
+  "onboardingDays": 0,
+  "established": true,
+  "firstDeliveryDay": null
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "sup_dogumetal",
+  "name": "Doğumetal Çelik Servis Ltd.",
+  "country": "TR",
+  "offers": [
+   {
+    "materialId": "steel",
+    "unitPrice": 3850,
+    "leadTimeDays": 12
+   }
+  ],
+  "paymentTermsDays": 15,
+  "depositBps": 3000,
+  "reliabilityBps": 8000,
+  "onboardingDays": 4,
+  "established": false,
+  "firstDeliveryDay": null
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "sup_alpaka",
+  "name": "Alpaka Alüminyum San. A.Ş.",
+  "country": "TR",
+  "offers": [
+   {
+    "materialId": "aluminium",
+    "unitPrice": 12000,
+    "leadTimeDays": 10
+   }
+  ],
+  "paymentTermsDays": 30,
+  "depositBps": 0,
+  "reliabilityBps": 9500,
+  "onboardingDays": 0,
+  "established": true,
+  "firstDeliveryDay": null
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "sup_hidrovar",
+  "name": "Hidrovar Komponent A.Ş.",
+  "country": "TR",
+  "offers": [
+   {
+    "materialId": "components",
+    "unitPrice": 45000,
+    "leadTimeDays": 14
+   }
+  ],
+  "paymentTermsDays": 45,
+  "depositBps": 0,
+  "reliabilityBps": 9300,
+  "onboardingDays": 0,
+  "established": true,
+  "firstDeliveryDay": null
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "sup_teknoray",
+  "name": "Teknoray Bileşen Ltd.",
+  "country": "TR",
+  "offers": [
+   {
+    "materialId": "components",
+    "unitPrice": 47000,
+    "leadTimeDays": 9
+   }
+  ],
+  "paymentTermsDays": 30,
+  "depositBps": 1000,
+  "reliabilityBps": 9000,
+  "onboardingDays": 3,
+  "established": false,
+  "firstDeliveryDay": null
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "sup_kartopak",
+  "name": "Kartopak Ambalaj San.",
+  "country": "TR",
+  "offers": [
+   {
+    "materialId": "packaging",
+    "unitPrice": 8500,
+    "leadTimeDays": 5
+   }
+  ],
+  "paymentTermsDays": 30,
+  "depositBps": 0,
+  "reliabilityBps": 9800,
+  "onboardingDays": 0,
+  "established": true,
+  "firstDeliveryDay": null
+ }
+]

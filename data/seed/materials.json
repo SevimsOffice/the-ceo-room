@@ -1,0 +1,46 @@
+[
+ {
+  "workspaceId": "ws_demo",
+  "id": "steel",
+  "nameKey": "material.steel",
+  "unit": "kg",
+  "stockQty": 150000,
+  "stockValue": 570000000,
+  "safetyStock": 60000,
+  "lotSize": 20000,
+  "preferredSupplierId": "sup_kuzeycelik"
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "aluminium",
+  "nameKey": "material.aluminium",
+  "unit": "kg",
+  "stockQty": 26000,
+  "stockValue": 312000000,
+  "safetyStock": 6000,
+  "lotSize": 2000,
+  "preferredSupplierId": "sup_alpaka"
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "components",
+  "nameKey": "material.components",
+  "unit": "pcs",
+  "stockQty": 9000,
+  "stockValue": 405000000,
+  "safetyStock": 1500,
+  "lotSize": 500,
+  "preferredSupplierId": "sup_hidrovar"
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "packaging",
+  "nameKey": "material.packaging",
+  "unit": "set",
+  "stockQty": 3000,
+  "stockValue": 25500000,
+  "safetyStock": 800,
+  "lotSize": 500,
+  "preferredSupplierId": "sup_kartopak"
+ }
+]

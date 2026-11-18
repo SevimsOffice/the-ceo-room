@@ -1,0 +1,44 @@
+[
+ {
+  "workspaceId": "ws_demo",
+  "departmentId": "sales",
+  "headcount": 15,
+  "baseTurnoverBps": 90,
+  "avgMonthlyCost": 8500000
+ },
+ {
+  "workspaceId": "ws_demo",
+  "departmentId": "operations",
+  "headcount": 126,
+  "baseTurnoverBps": 180,
+  "avgMonthlyCost": 6200000
+ },
+ {
+  "workspaceId": "ws_demo",
+  "departmentId": "procurement",
+  "headcount": 11,
+  "baseTurnoverBps": 80,
+  "avgMonthlyCost": 8000000
+ },
+ {
+  "workspaceId": "ws_demo",
+  "departmentId": "finance",
+  "headcount": 10,
+  "baseTurnoverBps": 70,
+  "avgMonthlyCost": 9000000
+ },
+ {
+  "workspaceId": "ws_demo",
+  "departmentId": "people",
+  "headcount": 7,
+  "baseTurnoverBps": 70,
+  "avgMonthlyCost": 7800000
+ },
+ {
+  "workspaceId": "ws_demo",
+  "departmentId": "cx",
+  "headcount": 12,
+  "baseTurnoverBps": 110,
+  "avgMonthlyCost": 7200000
+ }
+]

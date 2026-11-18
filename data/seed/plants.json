@@ -1,0 +1,99 @@
+{
+ "plants": [
+  {
+   "workspaceId": "ws_demo",
+   "id": "plant_nilufer",
+   "name": "Nilüfer",
+   "city": "Bursa",
+   "headcount": 46,
+   "productFamilies": [
+    "frames",
+    "panels"
+   ]
+  },
+  {
+   "workspaceId": "ws_demo",
+   "id": "plant_gemlik",
+   "name": "Gemlik",
+   "city": "Bursa",
+   "headcount": 44,
+   "productFamilies": [
+    "presses",
+    "frames"
+   ]
+  },
+  {
+   "workspaceId": "ws_demo",
+   "id": "plant_inegol",
+   "name": "İnegöl",
+   "city": "Bursa",
+   "headcount": 36,
+   "productFamilies": [
+    "drives",
+    "panels"
+   ]
+  }
+ ],
+ "lines": [
+  {
+   "workspaceId": "ws_demo",
+   "id": "p1_cutting",
+   "plantId": "plant_nilufer",
+   "kindKey": "line.cutting",
+   "shiftsPerDay": 2,
+   "hoursPerShift": 8,
+   "status": "running",
+   "repairDueDay": null
+  },
+  {
+   "workspaceId": "ws_demo",
+   "id": "p1_welding",
+   "plantId": "plant_nilufer",
+   "kindKey": "line.welding",
+   "shiftsPerDay": 2,
+   "hoursPerShift": 8,
+   "status": "running",
+   "repairDueDay": null
+  },
+  {
+   "workspaceId": "ws_demo",
+   "id": "p2_press",
+   "plantId": "plant_gemlik",
+   "kindKey": "line.press",
+   "shiftsPerDay": 2,
+   "hoursPerShift": 8,
+   "status": "running",
+   "repairDueDay": null
+  },
+  {
+   "workspaceId": "ws_demo",
+   "id": "p2_machining",
+   "plantId": "plant_gemlik",
+   "kindKey": "line.machining",
+   "shiftsPerDay": 2,
+   "hoursPerShift": 8,
+   "status": "running",
+   "repairDueDay": null
+  },
+  {
+   "workspaceId": "ws_demo",
+   "id": "p3_assembly",
+   "plantId": "plant_inegol",
+   "kindKey": "line.assembly",
+   "shiftsPerDay": 2,
+   "hoursPerShift": 8,
+   "status": "running",
+   "repairDueDay": null
+  },
+  {
+   "workspaceId": "ws_demo",
+   "id": "p3_paint",
+   "plantId": "plant_inegol",
+   "kindKey": "line.paint",
+   "shiftsPerDay": 2,
+   "hoursPerShift": 8,
+   "status": "running",
+   "repairDueDay": null
+  }
+ ]
+}

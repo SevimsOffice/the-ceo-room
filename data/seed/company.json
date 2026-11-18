@@ -1,0 +1,22 @@
+{
+ "company": {
+  "workspaceId": "ws_demo",
+  "id": "novara",
+  "nameKey": "company.name",
+  "city": "Bursa",
+  "currency": "TRY",
+  "simulated": true,
+  "seedVersion": 1
+ },
+ "settings": {
+  "periodLengthDays": 30,
+  "runwayHorizonDays": 180,
+  "labourCostPerLineHour": 360000,
+  "energyCostPerLineHour": 90000,
+  "overtimeCrewPerLine": 9,
+  "overtimeRatePerPersonHour": 65000,
+  "maxOvertimeHoursPerLineDay": 3,
+  "mrpCoverDays": 14,
+  "turnoverBpsPerOvertimeHourPerHead": 12
+ }
+}

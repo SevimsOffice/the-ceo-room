@@ -1,0 +1,20 @@
+{
+  "name": "the-ceo-room",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck && tsc --noEmit -p scripts",
+    "seed": "tsx scripts/generate-seed.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.1"
+  }
+}

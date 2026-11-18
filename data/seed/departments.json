@@ -1,0 +1,212 @@
+[
+ {
+  "workspaceId": "ws_demo",
+  "id": "sales",
+  "nameKey": "department.sales",
+  "headName": "Selin Arslan",
+  "headTitleKey": "title.salesDirector",
+  "kpis": [
+   "kpi.revenue",
+   "kpi.backlogValue",
+   "kpi.openOrders"
+  ],
+  "constraints": [
+   {
+    "code": "constraint.creditLimits",
+    "params": {}
+   }
+  ],
+  "activeTasks": [
+   {
+    "code": "task.registerLargeOrder",
+    "params": {}
+   }
+  ],
+  "risks": [
+   {
+    "code": "risk.customerConcentration",
+    "params": {}
+   }
+  ],
+  "dependsOn": [
+   "operations",
+   "finance"
+  ]
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "operations",
+  "nameKey": "department.operations",
+  "headName": "Murat Demir",
+  "headTitleKey": "title.coo",
+  "kpis": [
+   "kpi.capacityUtilisation",
+   "kpi.deliverySlip",
+   "kpi.overtimeHours"
+  ],
+  "constraints": [
+   {
+    "code": "constraint.twoShifts",
+    "params": {}
+   },
+   {
+    "code": "constraint.noWeekendProduction",
+    "params": {}
+   }
+  ],
+  "activeTasks": [
+   {
+    "code": "task.scheduleBacklog",
+    "params": {}
+   }
+  ],
+  "risks": [
+   {
+    "code": "risk.pressLineAge",
+    "params": {
+     "lineId": "p2_press"
+    }
+   }
+  ],
+  "dependsOn": [
+   "procurement",
+   "people"
+  ]
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "procurement",
+  "nameKey": "department.procurement",
+  "headName": "Emre Yıldız",
+  "headTitleKey": "title.supplyChainDirector",
+  "kpis": [
+   "kpi.materialCoverage",
+   "kpi.supplierReliability"
+  ],
+  "constraints": [
+   {
+    "code": "constraint.steelSingleSource",
+    "params": {
+     "materialId": "steel"
+    }
+   }
+  ],
+  "activeTasks": [
+   {
+    "code": "task.steelReorders",
+    "params": {}
+   }
+  ],
+  "risks": [
+   {
+    "code": "risk.steelPriceVolatility",
+    "params": {}
+   }
+  ],
+  "dependsOn": [
+   "finance"
+  ]
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "finance",
+  "nameKey": "department.finance",
+  "headName": "Ayşe Kaya",
+  "headTitleKey": "title.cfo",
+  "kpis": [
+   "kpi.cash",
+   "kpi.runway",
+   "kpi.grossMargin"
+  ],
+  "constraints": [
+   {
+    "code": "constraint.noNewCredit",
+    "params": {}
+   }
+  ],
+  "activeTasks": [
+   {
+    "code": "task.cashForecast",
+    "params": {}
+   }
+  ],
+  "risks": [
+   {
+    "code": "risk.longReceivables",
+    "params": {
+     "days": 90
+    }
+   }
+  ],
+  "dependsOn": [
+   "sales"
+  ]
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "people",
+  "nameKey": "department.people",
+  "headName": "Zeynep Şahin",
+  "headTitleKey": "title.chro",
+  "kpis": [
+   "kpi.turnover",
+   "kpi.headcount"
+  ],
+  "constraints": [
+   {
+    "code": "constraint.overtimeCap",
+    "params": {
+     "hours": 3
+    }
+   }
+  ],
+  "activeTasks": [
+   {
+    "code": "task.shiftPlanning",
+    "params": {}
+   }
+  ],
+  "risks": [
+   {
+    "code": "risk.overtimeFatigue",
+    "params": {}
+   }
+  ],
+  "dependsOn": [
+   "operations"
+  ]
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "cx",
+  "nameKey": "department.cx",
+  "headName": "Can Öztürk",
+  "headTitleKey": "title.cxDirector",
+  "kpis": [
+   "kpi.satisfaction",
+   "kpi.churnRisk"
+  ],
+  "constraints": [
+   {
+    "code": "constraint.keyAccountReviews",
+    "params": {}
+   }
+  ],
+  "activeTasks": [
+   {
+    "code": "task.satisfactionRecovery",
+    "params": {}
+   }
+  ],
+  "risks": [
+   {
+    "code": "risk.lateDeliveries",
+    "params": {}
+   }
+  ],
+  "dependsOn": [
+   "sales",
+   "operations"
+  ]
+ }
+]

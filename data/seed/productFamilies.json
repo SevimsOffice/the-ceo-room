@@ -1,0 +1,98 @@
+[
+ {
+  "workspaceId": "ws_demo",
+  "id": "frames",
+  "nameKey": "product.frames",
+  "unitPrice": 2400000,
+  "minutesPerUnit": 40,
+  "bom": [
+   {
+    "materialId": "steel",
+    "qtyPerUnit": 380
+   },
+   {
+    "materialId": "components",
+    "qtyPerUnit": 3
+   },
+   {
+    "materialId": "packaging",
+    "qtyPerUnit": 1
+   }
+  ]
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "presses",
+  "nameKey": "product.presses",
+  "unitPrice": 5800000,
+  "minutesPerUnit": 97,
+  "bom": [
+   {
+    "materialId": "steel",
+    "qtyPerUnit": 700
+   },
+   {
+    "materialId": "aluminium",
+    "qtyPerUnit": 30
+   },
+   {
+    "materialId": "components",
+    "qtyPerUnit": 12
+   },
+   {
+    "materialId": "packaging",
+    "qtyPerUnit": 2
+   }
+  ]
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "panels",
+  "nameKey": "product.panels",
+  "unitPrice": 950000,
+  "minutesPerUnit": 16,
+  "bom": [
+   {
+    "materialId": "steel",
+    "qtyPerUnit": 115
+   },
+   {
+    "materialId": "aluminium",
+    "qtyPerUnit": 10
+   },
+   {
+    "materialId": "components",
+    "qtyPerUnit": 1
+   },
+   {
+    "materialId": "packaging",
+    "qtyPerUnit": 1
+   }
+  ]
+ },
+ {
+  "workspaceId": "ws_demo",
+  "id": "drives",
+  "nameKey": "product.drives",
+  "unitPrice": 3600000,
+  "minutesPerUnit": 59,
+  "bom": [
+   {
+    "materialId": "steel",
+    "qtyPerUnit": 250
+   },
+   {
+    "materialId": "aluminium",
+    "qtyPerUnit": 40
+   },
+   {
+    "materialId": "components",
+    "qtyPerUnit": 16
+   },
+   {
+    "materialId": "packaging",
+    "qtyPerUnit": 1
+   }
+  ]
+ }
+]

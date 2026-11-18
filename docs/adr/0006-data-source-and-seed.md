@@ -1,6 +1,6 @@
 # ADR-0006: CompanyDataSource interface with static seed files
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 
 ## Context

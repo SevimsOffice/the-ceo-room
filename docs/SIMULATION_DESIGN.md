@@ -1,6 +1,6 @@
 # Simulation design
 
-Status: **Proposed (Phase 0)**.
+Status: **Accepted** (2026-11-18). See `docs/OPEN_QUESTIONS.md` for resolved questions.
 
 ## 1. Clock
 
@@ -9,6 +9,11 @@ Status: **Proposed (Phase 0)**.
 - Controls: advance 1 day / 1 week (7) / 1 month (30), pause. The UI "Advance day" bell = 1 day.
 - `advance(n)` runs the daily tick `n` times. Open decisions do not block time. A decision
   left open past its deadline triggers its card's default outcome (usually the worst one).
+
+- **Day 1 storyline:** morning report + two telegrams (large order arrives; steel supplier +20%).
+  Later cards: key customer 8% discount demand, Plant 2 press-line breakdown.
+- **Projected cash runway** = days until the engine's baseline forecast (no new decisions) first
+  shows cash < 0, capped at the forecast horizon (180 days → shown as "180+").
 
 ## 2. Determinism
 
@@ -63,7 +68,7 @@ hits satisfaction and delays receivables, which moves the cash curve.
   `SetSupplierPrice(supplier, +10%)`, `CommitVolume(supplier, qty)`.
 - Impact preview = `project(option.commands, 0..30)` vs `project([], 0..30)` (baseline). The
   Decision Room shows the delta on cash, margin, lead time, customer satisfaction, people
-  (overtime/turnover) and risk, **today vs Day +30**. Scenario Study reuses this with 30/90/180/365.
+  (overtime/turnover) and risk, **today vs Day +30** (the Decision Room's long term). Scenario Study reuses this with 30/90/180/365.
 - Some outcomes are not certain (e.g. negotiation success). Options carry an explicit
   probability; projections show the expected path and, later, a range. The actual outcome
   is drawn from the seeded stream when approved.

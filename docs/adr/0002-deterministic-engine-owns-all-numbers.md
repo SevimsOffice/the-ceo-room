@@ -1,6 +1,6 @@
 # ADR-0002: A deterministic, pure engine owns all numbers
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 
 ## Context

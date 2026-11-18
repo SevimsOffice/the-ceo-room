@@ -1,6 +1,6 @@
 # Domain model
 
-Status: **Proposed (Phase 0)**. Every entity carries `workspaceId`. IDs are string-branded
+Status: **Accepted** (2026-11-18). Every entity carries `workspaceId`. IDs are string-branded
 (`CustomerId`, `OrderId`…). Money = integer kuruş (`Money`), rates = basis points (`Bps`),
 time = `SimDay` (integer day index, Day 1 = Monday).
 

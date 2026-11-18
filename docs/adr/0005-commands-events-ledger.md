@@ -1,6 +1,6 @@
 # ADR-0005: Commands → events → reducer, with an append-only ledger
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 
 ## Context

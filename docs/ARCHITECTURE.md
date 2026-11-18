@@ -1,6 +1,6 @@
 # Architecture
 
-Status: **Proposed (Phase 0)**. Awaiting approval.
+Status: **Accepted** (2026-11-18). Decisions on open questions: `docs/OPEN_QUESTIONS.md`.
 
 ## 1. Shape of the system
 

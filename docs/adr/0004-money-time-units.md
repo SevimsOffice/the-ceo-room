@@ -1,6 +1,6 @@
 # ADR-0004: Money in integer kuruş, rates in basis points, time in SimDay
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-18
 
 ## Context

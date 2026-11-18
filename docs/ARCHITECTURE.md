@@ -1,0 +1,113 @@
+# Architecture
+
+Status: **Proposed (Phase 0)**. Awaiting approval.
+
+## 1. Shape of the system
+
+```
+ data/seed/*.json ──► CompanyDataSource ──► Engine (packages/engine, pure TS)
+                                              │  state: CompanyState
+                                              │  in:   Command
+                                              │  out:  Event[]  ──► Ledger (append-only)
+                                              ▼
+                                         Selectors / Projections
+                                              │ (read-only view models)
+             ┌────────────────────────────────┼──────────────────────────────┐
+             ▼                                ▼                              ▼
+   apps/web (React UI)             Advisors (rule-based V1)         AI layer (later, optional)
+   Zustand store holds             cite selector values,            read-only tools over
+   engine instance + UI state      never compute their own          selectors; proposals need
+                                   numbers                          human approval → Command
+```
+
+Everything that changes the company goes through `engine.dispatch(command)`. Nothing else
+can mutate state.
+
+## 2. Packages
+
+| Package | Responsibility | Depends on |
+|---|---|---|
+| `packages/engine` | Domain model, systems, commands, events, rules, projections, selectors, RNG | nothing (no DOM, no React, no LLM, no I/O) |
+| `packages/i18n` | `tr`/`en` catalogues, `formatMoney`, `formatPercent`, `formatDays` (locale-aware) | none |
+| `apps/web` | Rooms, physical-object components, Zustand store, localStorage save | engine, i18n |
+| `scripts/` | `generate-seed.ts` (fixed seed → `data/seed/*.json`) | engine types |
+
+Monorepo via pnpm workspaces (ADR-0003). TypeScript strict across all packages.
+
+## 3. Engine API (sketch)
+
+```ts
+interface CompanyDataSource { load(workspaceId: WorkspaceId): Promise<SeedBundle> }
+
+createEngine(seed: SeedBundle, opts: { rngSeed: number; workspaceId: WorkspaceId }): Engine
+
+interface Engine {
+  state(): Readonly<CompanyState>
+  dispatch(cmd: Command): DispatchResult          // validated; returns produced events
+  advance(days: number): Event[]                  // runs the daily tick N times
+  project(cmds: Command[], days: number): Projection  // run on a cloned state, original untouched
+  ledger(): readonly LedgerEntry[]
+  snapshot(): SaveGame                            // seed ref + rng state + command log
+}
+```
+
+- `dispatch` is the only write path. A command is validated, turned into events, and events
+  are reduced into state (ADR-0005).
+- `project` powers every "impact" figure (Decision Room short-term vs 30 days, Scenario Study
+  30/90/180/365). Options are previewed by **running the real engine forward on a clone**, so
+  the numbers shown before a decision are the same code path that produces the numbers after.
+- Selectors (`selectMorningReport`, `selectDecision(id)`, `selectAdvisorBrief(role)`…) are
+  pure functions `CompanyState → ViewModel`. UI and advisors only see these.
+
+## 4. Persistence
+
+V1 is fully in-browser. Save game = `{ seedVersion, rngSeed, commandLog }` in localStorage.
+Loading replays the command log (deterministic), so saves stay small and verifiable. Periodic
+state snapshots can be added if replay gets slow. Supabase later, behind the same interface.
+
+## 5. UI layer
+
+- React + Vite + Tailwind (tokens from `design/README.md`) + Zustand.
+- Rooms as routes: `/desk`, `/decision/:id`, later `/scenarios`, `/board`, `/office/:dept`,
+  `/map`, `/ledger`.
+- Components model physical objects; charts (later) are styled as printed/ink-drawn.
+- Input: mouse/keyboard/touch first. Camera mode (MediaPipe) is a late milestone and only
+  emits the same UI actions (`select`, `approve`, `reject`).
+
+## 6. AI layer (later, optional)
+
+Provider-independent adapter, structured outputs, department-scoped read-only tools that
+call selectors, cached responses, audit trail. Any state change it suggests is turned into a
+`Command` that the CEO must approve. The app is fully usable with AI off; V1 advisors are
+rule-based (`rules/advisors/*`). API keys never in the frontend (needs a small server
+proxy when this lands).
+
+## 7. First workflow (Milestone 1 vertical slice)
+
+1. Load seed → Day 1 state. `selectMorningReport` gives revenue, cash, runway, backlog,
+   satisfaction, capacity, critical developments, pending decisions.
+2. Event card "large order" fires → `OrderReceived`. Sales registers it; capacity check,
+   material check against BOM, procurement need, supplier lead time, production cost,
+   payment terms, shift need and delivery date are computed by the systems (see
+   SIMULATION_DESIGN §4).
+3. Event card "supplier price increase" fires → `SupplierPriceChanged`, which re-costs open
+   purchase needs and affected orders.
+4. A `Decision` is opened with options. Each option is a list of commands; `project()` gives
+   short-term and +30-day deltas.
+5. CFO and COO rules read their department selectors and recommend different options,
+   citing the projected values and stating assumptions.
+6. CEO approves an option → commands dispatched → events in ledger.
+7. `advance(30)` → systems run day by day.
+8. Morning report shows consequences, including a delayed cash effect (e.g. supplier payment
+   terms due before customer receivables arrive).
+
+Integration tests assert steps 2–8 and that each option leads to a different state.
+
+## 8. Cross-cutting
+
+- **workspaceId** on every entity and event.
+- **i18n**: engine emits codes + params (`{ code: 'event.supplierPriceIncrease', params }`), never
+  sentences. UI translates.
+- **Currency**: engine stores kuruş in the company's currency (TRY). Display currency and
+  formatting live in `packages/i18n`.
+- **Errors**: invalid commands return typed errors; engine never throws on user input.

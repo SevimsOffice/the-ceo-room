@@ -1,0 +1,20 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Decision.dc.html": { "h": 980, "is_interactive": true, "title": "Decision Room · EN", "w": 1440, "x": 1520, "y": 0 },
+    "Karar.dc.html": { "h": 980, "is_interactive": true, "title": "Karar Odası · TR", "w": 1440, "x": 1520, "y": 1400 },
+    "Main.dc.html": { "h": 900, "is_interactive": true, "title": "Desk · EN", "w": 1440, "x": 0, "y": 0 },
+    "Masa.dc.html": { "h": 900, "is_interactive": true, "title": "Masa · TR", "w": 1440, "x": 0, "y": 1400 }
+  },
+  "createdOnFiles": { "at": "2026-11-18T18:53:25Z", "v": 1 },
+  "designSystems": [],
+  "launch": { "view": "canvas" },
+  "notes": {
+    "t1": { "kind": "title1", "maxW": 2960, "text": "The CEO Room — English", "w": 240, "x": 0, "y": -260 },
+    "t2": { "kind": "title1", "maxW": 2960, "text": "The CEO Room — Türkçe", "w": 240, "x": 0, "y": 1140 }
+  },
+  "order": ["Main.dc.html", "Decision.dc.html", "Masa.dc.html", "Karar.dc.html"],
+  "pages": [],
+  "title": "The CEO Room — Desk & Decision Room"
+}

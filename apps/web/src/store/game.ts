@@ -121,6 +121,12 @@ export interface GameState {
   /** the ink stamp: runs the default option (sent at once, like the seal) */
   reject(pressMs?: number): void;
   requestAnalysis(): void;
+  /**
+   * wait one day without leaving the Decision Room (the same advance as the Desk's bell). The room's
+   * figures are recalculated once the day has run; if the decision expires that day, the room gives
+   * way to the Desk with the carbon copy of what its deadline did.
+   */
+  advanceDay(): void;
   openMemo(): void;
   closeMemo(): void;
   previewMemo(commands: CeoCommand[]): void;
@@ -376,6 +382,11 @@ export const useGame = create<GameState>()((set, get) => ({
     set({ room: { ...r, pending: 'analysis' } });
     transport.send({ type: 'dispatch', command: { type: 'requestAnalysis', decisionId: r.decisionId } });
   },
+  advanceDay() {
+    const s = get();
+    if (s.view !== 'room' || s.playing || !canDecide(s) || s.room?.leaving) return;
+    s.advance(1);
+  },
   openMemo() {
     const r = get().room;
     if (r && currentRoomView(get())?.status === 'open') set({ room: { ...r, memoOpen: true } });
@@ -521,6 +532,14 @@ export const useGame = create<GameState>()((set, get) => ({
       }
       case 'ledgerSlip': {
         const s = get();
+        // the decision in front closed by itself (its deadline passed during a day run from the
+        // room): the room gives way to the Desk, where its carbon copy is open
+        const r = s.room;
+        if (r && !r.leaving && !r.pending && s.view === 'room' && r.decisionId === msg.slip.decisionId) {
+          set({ ledgerSlip: msg.slip, ledgerOpen: true, slipFor: null, room: null, view: 'desk' });
+          transport.send({ type: 'closeRoom' });
+          return;
+        }
         set({ ledgerSlip: msg.slip, ledgerOpen: s.ledgerOpen || s.slipFor === msg.slip.decisionId, slipFor: null });
         return;
       }

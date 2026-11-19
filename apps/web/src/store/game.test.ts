@@ -396,6 +396,66 @@ describe('Decision Room', () => {
     expect(currentRoomView(useGame.getState())!.analysis!.extended!.horizons).toEqual([7, 30, 90]);
   });
 
+  it('+1 day in the room: one day runs, the room stays and follows it once (with +90 after an analysis)', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    await c.settle();
+    useGame.getState().requestAnalysis();
+    await c.settle();
+    const roomsBefore = c.sent.filter((m) => m.type === 'openRoom').length;
+    useGame.getState().advanceDay();
+    useGame.getState().advanceDay();
+    expect(c.sent.filter((m) => m.type === 'advance')).toEqual([{ type: 'advance', days: 1 }]);
+    // while the day runs nothing in the room can act
+    expect(canDecide(useGame.getState())).toBe(false);
+    await c.settle();
+    expect(day()).toBe(2);
+    expect(useGame.getState().view).toBe('room');
+    const v = currentRoomView(useGame.getState())!;
+    expect(v.day).toBe(2);
+    expect(v.analysis).toMatchObject({ ready: true });
+    expect(v.analysis!.extended!.horizons).toEqual([7, 30, 90]);
+    // the worker followed the day by itself: no second openRoom was needed
+    expect(c.sent.filter((m) => m.type === 'openRoom').length).toBe(roomsBefore);
+  });
+
+  it('+1 day is refused behind the Desk tab, while auto-playing and while a command is pending', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    await c.settle();
+    useGame.getState().showDesk();
+    useGame.getState().advanceDay();
+    useGame.getState().showRoom();
+    await c.settle();
+    useGame.setState({ room: { ...room()!, pending: 'analysis' } });
+    useGame.getState().advanceDay();
+    useGame.setState({ room: { ...room()!, pending: null }, playing: true });
+    useGame.getState().advanceDay();
+    useGame.setState({ playing: false });
+    expect(c.sent.filter((m) => m.type === 'advance')).toHaveLength(0);
+  });
+
+  it('a day run from the room past the deadline closes the room to the Desk with the carbon copy', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    await c.settle();
+    useGame.getState().advance(6);
+    await c.settle();
+    expect(currentRoomView(useGame.getState())!.daysLeft).toBe(1);
+    useGame.getState().advanceDay();
+    await c.settle();
+    const s = useGame.getState();
+    expect(day()).toBe(8);
+    expect(s.room).toBeNull();
+    expect(s.view).toBe('desk');
+    expect(s.ledgerSlip).toMatchObject({ decisionId: DEC, status: 'expired' });
+    expect(s.ledgerOpen).toBe(true);
+    expect(c.sent.at(-1)).toEqual({ type: 'closeRoom' });
+  });
+
   it('a memo is previewed, refreshed when the day changes, and sealed exactly as previewed', async () => {
     const c = connect();
     await c.init(null);

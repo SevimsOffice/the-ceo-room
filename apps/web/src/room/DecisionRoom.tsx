@@ -21,13 +21,13 @@ function OpenedTelegram({ v }: { v: RoomView }) {
   if (!tg) return null;
   return (
     <article className="on-paper relative" style={{ transform: 'rotate(-1.2deg)', background: '#e4d3a4', color: '#241a10', boxShadow: '0 12px 20px rgba(0,0,0,.55)' }} data-testid="room-telegram">
-      <div className="flex justify-between bg-[#2b1d14] px-3.5 py-[5px] font-type text-label tracking-[.12em] text-[#e9dcc0]">
+      <div className="flex justify-between bg-[#2b1d14] px-3.5 py-[3px] font-type text-label tracking-[.12em] text-[#e9dcc0]">
         <span>{t.t('ui.telegram.form')}</span>
         <span>{t.t('ui.telegram.number', { n: telegramNumber(tg.id) })}</span>
       </div>
-      <div className="px-4 pb-3 pt-2.5">
-        <p className="m-0 font-type text-label font-bold leading-[1.3]">{t.msg(tg.message)}</p>
-        <div className="mt-2 flex items-center justify-between">
+      <div className="px-3.5 pb-2 pt-2">
+        <p className="m-0 font-type text-label font-bold leading-[1.25]">{t.msg(tg.message)}</p>
+        <div className="mt-1.5 flex items-center justify-between">
           <span
             className="inline-block border-2 px-2 py-0.5 font-type text-label font-bold tracking-[.1em]"
             style={{ borderColor: SEVERITY_COLOR[tg.severity], color: SEVERITY_COLOR[tg.severity], transform: 'rotate(-3deg)' }}
@@ -41,44 +41,50 @@ function OpenedTelegram({ v }: { v: RoomView }) {
   );
 }
 
+/** A ledger line of the situation memo: label and figure on one line when they fit, else the figure below, right-aligned. */
+function FigureRow({ label, testId, children }: { label: string; testId: string; children: ReactNode }) {
+  return (
+    <div className="report-row flex flex-wrap items-baseline justify-between gap-x-2 py-[3px]">
+      <dt className="font-type text-label uppercase leading-tight text-ink-muted">{label}</dt>
+      <dd className="m-0 ml-auto font-type text-[17px] font-bold leading-tight text-ink" data-testid={testId}>
+        {children}
+      </dd>
+    </div>
+  );
+}
+
 function SituationMemo({ v }: { v: RoomView }) {
   const t = useT();
   const urgent = v.status === 'open' && v.daysLeft <= 1;
   return (
-    <section aria-labelledby="situation-title" className="paper on-paper relative mt-5 px-5 pb-4 pt-4" style={{ transform: 'rotate(.5deg)', boxShadow: '0 14px 26px rgba(0,0,0,.6)' }} data-testid="situation">
+    <section aria-labelledby="situation-title" className="paper on-paper relative mt-3 px-4 pb-2.5 pt-3" style={{ transform: 'rotate(.5deg)', boxShadow: '0 14px 26px rgba(0,0,0,.6)' }} data-testid="situation">
       <PaperNoise id="paper-situation" />
       <div className="relative">
-        <h2 id="situation-title" className="m-0 font-display text-[22px] font-extrabold">
+        <h2 id="situation-title" className="m-0 font-display text-[20px] font-extrabold leading-tight">
           {t.t('ui.room.situation')}
         </h2>
-        <div className="mt-2 h-[5px] border-b border-t-2 border-ink" />
-        <p className="m-0 mt-2 font-type text-label leading-snug text-[#3a2c1c]" data-testid="situation-text">
+        <div className="mt-1.5 h-[5px] border-b border-t-2 border-ink" />
+        <p className="m-0 mt-1.5 font-type text-label leading-[1.25] text-[#3a2c1c]" data-testid="situation-text">
           {t.msg(v.situation)}
         </p>
         {v.status === 'open' && (
-          <p className="m-0 mt-2 font-type text-label font-bold leading-snug" style={{ color: urgent ? '#8a1818' : '#4a3a28' }} data-testid="room-deadline">
+          <p className="m-0 mt-1.5 font-type text-label font-bold leading-[1.25]" style={{ color: urgent ? '#8a1818' : '#4a3a28' }} data-testid="room-deadline">
             {t.t('ui.room.deadlineLine', { left: daysLeftText(t, v.daysLeft), deadline: t.t('ui.room.deadline', { day: v.deadlineDay }) })}
           </p>
         )}
         <dl className="m-0 mt-1">
           {v.figures.flatMap((f) => {
             const row = (
-              <div key={f.code} className="report-row pb-1 pt-1.5">
-                <dt className="font-type text-label uppercase leading-tight tracking-[.04em] text-ink-muted">{t.t(f.code)}</dt>
-                <dd className="m-0 font-type text-[19px] font-bold leading-tight text-ink" data-testid={`room-figure-${f.code}`}>
-                  {figureText(t, f.code, f.value)}
-                </dd>
-              </div>
+              <FigureRow key={f.code} label={t.t(f.code)} testId={`room-figure-${f.code}`}>
+                {figureText(t, f.code, f.value)}
+              </FigureRow>
             );
             if (f.code !== 'figure.cash') return [row];
             return [
               row,
-              <div key="runway" className="report-row pb-1 pt-1.5">
-                <dt className="font-type text-label uppercase leading-tight tracking-[.04em] text-ink-muted">{t.t('figure.runwayDays')}</dt>
-                <dd className="m-0 font-type text-[19px] font-bold leading-tight text-ink" data-testid="room-runway">
-                  {runwayText(t, v.runway)}
-                </dd>
-              </div>,
+              <FigureRow key="runway" label={t.t('figure.runwayDays')} testId="room-runway">
+                {runwayText(t, v.runway)}
+              </FigureRow>,
             ];
           })}
         </dl>
@@ -214,22 +220,28 @@ function OptionNote({ v, optionId, index, stamp }: { v: RoomView; optionId: stri
   );
 }
 
-function AdvisorLetter({ v, brief, index }: { v: RoomView; brief: AdvisorBrief; index: number }) {
+/**
+ * An advisor's signed letter. Folded, it shows who writes, the pick and the first caution; "read
+ * more" unfolds the reasoning and any further cautions (the column then scrolls).
+ */
+function AdvisorLetter({ v, brief, index, expanded, onToggle }: { v: RoomView; brief: AdvisorBrief; index: number; expanded: boolean; onToggle: () => void }) {
   const t = useT();
   const role = t.t(`ui.room.advisor.short.${brief.role}`);
+  const bodyId = `advisor-${brief.role}-more`;
   return (
     <article
-      className="paper on-paper relative box-border w-full px-4 pb-3.5 pt-4"
-      style={{ transform: `rotate(${index % 2 === 0 ? 1 : -1}deg)`, boxShadow: '0 14px 24px rgba(0,0,0,.55)', marginTop: index === 0 ? 0 : 16 }}
+      className="paper on-paper relative box-border w-full px-3.5 pb-1.5 pt-3"
+      style={{ transform: `rotate(${index % 2 === 0 ? 0.8 : -0.8}deg)`, boxShadow: '0 14px 24px rgba(0,0,0,.55)', marginTop: index === 0 ? 0 : 12 }}
       aria-labelledby={`advisor-${brief.role}`}
       data-testid={`advisor-${brief.role}`}
       data-recommends={brief.recommendedOptionId}
+      data-expanded={expanded}
     >
       <PaperNoise id={`paper-advisor-${brief.role}`} opacity={0.3} />
       <div className="relative">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <span
-            className="flex h-[48px] w-[48px] flex-none items-center justify-center font-display text-[15.5px] font-bold text-[#f3e6c8]"
+            className="flex h-[44px] w-[44px] flex-none items-center justify-center font-display text-[15.5px] font-bold text-[#f3e6c8]"
             style={{ borderRadius: '50% 46% 50% 48%', background: 'radial-gradient(circle at 35% 30%,#b0302f,#5a0f12)', boxShadow: '0 3px 6px rgba(0,0,0,.5),inset 0 0 0 3px rgba(255,255,255,.12)' }}
             aria-hidden="true"
           >
@@ -239,24 +251,39 @@ function AdvisorLetter({ v, brief, index }: { v: RoomView; brief: AdvisorBrief; 
             {t.t('ui.room.advisor.title', { title: t.t(brief.titleKey), role })}
           </h3>
         </div>
-        <p className="m-0 mt-2 font-type text-label font-bold leading-snug text-oxblood" data-testid="advisor-recommends">
+        <p className="m-0 mt-1.5 font-type text-label font-bold leading-[1.25] text-oxblood" data-testid="advisor-recommends">
           {t.t('ui.room.advisor.recommends', { option: optionName(t, v, brief.recommendedOptionId) })}
         </p>
-        <p className="m-0 mt-1.5 font-hand text-[18px] font-semibold italic leading-[1.17] text-[#2a1c10]" data-testid="advisor-rationale">
+        <p id={bodyId} hidden={!expanded} className="m-0 mt-1.5 font-hand text-[18px] font-semibold italic leading-[1.12] text-[#2a1c10]" data-testid="advisor-rationale">
           {withOptionNames(t, v, brief.rationale)}
         </p>
         {brief.caveats.length > 0 && (
-          <ul className="m-0 mt-2 list-none border-t border-dotted border-[rgba(60,40,20,.55)] p-0 pt-1.5" data-testid="advisor-caveats">
+          <ul className="m-0 mt-1.5 list-none border-t border-dotted border-[rgba(60,40,20,.55)] p-0 pt-1" data-testid="advisor-caveats">
             {brief.caveats.map((c, i) => (
-              <li key={i} className="mt-0.5 font-hand text-[18px] font-bold italic leading-[1.17] text-[#6a1414]">
+              <li key={i} hidden={i > 0 && !expanded} className="mt-0.5 font-hand text-[18px] font-bold italic leading-[1.12] text-[#6a1414]">
                 {t.t('ui.room.advisor.caveat', { text: withOptionNames(t, v, c) })}
               </li>
             ))}
           </ul>
         )}
-        <p className="m-0 mt-2 text-right font-hand text-[19px] font-semibold italic text-ink" data-testid="advisor-signature">
-          {t.t('ui.room.advisor.signature', { name: brief.advisorName, role })}
-        </p>
+        <div className="-mb-1 flex flex-wrap items-center justify-between gap-x-2">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={expanded}
+            aria-controls={bodyId}
+            className="press -ml-2 flex h-touch min-w-touch cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-sm border-0 bg-transparent px-2 font-type text-label font-bold text-oxblood underline decoration-dotted underline-offset-4 hover:bg-[rgba(106,28,31,.08)]"
+            data-testid="advisor-toggle"
+          >
+            <span aria-hidden="true" className="inline-block transition-transform duration-150" style={{ transform: expanded ? 'rotate(90deg)' : 'none' }}>
+              ▸
+            </span>
+            {t.t(expanded ? 'ui.room.advisor.less' : 'ui.room.advisor.more')}
+          </button>
+          <p className="m-0 -mt-2 mb-1.5 ml-auto whitespace-nowrap text-right font-hand text-[19px] font-semibold italic leading-tight text-ink" data-testid="advisor-signature">
+            {t.t('ui.room.advisor.signature', { name: brief.advisorName, role })}
+          </p>
+        </div>
       </div>
     </article>
   );
@@ -301,6 +328,8 @@ export function DecisionRoom() {
   const missing = useGame((s) => s.room?.view?.version === s.version && s.room.view.data === null);
   const closeRoom = useGame((s) => s.closeRoom);
   const [stamp, setStamp] = useState<Stamp>(null);
+  // which advisors' letters are unfolded (kept while the figures are recalculated after a day)
+  const [unfolded, setUnfolded] = useState<Record<string, boolean>>({});
   const optionsHeading = useRef<HTMLHeadingElement>(null);
   const shown = v !== null && v.status === 'open';
   // the control last focused in the room, to find it again after the figures were recalculated
@@ -387,13 +416,13 @@ export function DecisionRoom() {
         </div>
       </section>
 
-      <section aria-labelledby="counsel-heading" className="absolute left-[1144px] top-[84px] z-10 telegram-scroll h-[720px] w-[272px] overflow-y-auto overflow-x-hidden px-2 pb-4 pt-1" data-testid="room-counsel" tabIndex={0}>
+      <section aria-labelledby="counsel-heading" className="absolute left-[1140px] top-[84px] z-10 telegram-scroll h-[720px] w-[286px] overflow-y-auto overflow-x-hidden px-2 pb-3 pt-1" data-testid="room-counsel" tabIndex={0}>
         <h2 id="counsel-heading" className="brass m-0 inline-block rounded-[3px] px-4 py-1.5 font-display text-label font-bold tracking-[.08em]">
           {t.t('ui.room.counsel')}
         </h2>
-        <div className="mt-4">
+        <div className="mt-3">
           {v.advisors.map((b, i) => (
-            <AdvisorLetter key={b.role} v={v} brief={b} index={i} />
+            <AdvisorLetter key={b.role} v={v} brief={b} index={i} expanded={unfolded[b.role] === true} onToggle={() => setUnfolded((u) => ({ ...u, [b.role]: !u[b.role] }))} />
           ))}
         </div>
       </section>

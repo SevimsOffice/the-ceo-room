@@ -225,6 +225,51 @@ describe('DecisionRoom', () => {
     expect(sent.filter((m) => m.type === 'previewCustom')).toHaveLength(0);
   });
 
+  it('advisor letters are folded to the pick and first caution; "read more" is a real toggle', () => {
+    render(<DecisionRoom />);
+    const cfo = screen.getByTestId('advisor-cfo');
+    const toggle = cfo.querySelector<HTMLButtonElement>('[data-testid=advisor-toggle]')!;
+    const rationale = cfo.querySelector<HTMLElement>('[data-testid=advisor-rationale]')!;
+    expect(toggle.tagName).toBe('BUTTON');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-controls')).toBe(rationale.id);
+    expect(toggle.textContent).toContain(tr.t('ui.room.advisor.more'));
+    expect(rationale.hidden).toBe(true);
+    const items = [...cfo.querySelectorAll<HTMLElement>('[data-testid=advisor-caveats] li')];
+    expect(items[0]!.hidden).toBe(false);
+    for (const li of items.slice(1)) expect(li.hidden).toBe(true);
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.textContent).toContain(tr.t('ui.room.advisor.less'));
+    expect(rationale.hidden).toBe(false);
+    for (const li of items) expect(li.hidden).toBe(false);
+    // the other letter stays as it was
+    expect(screen.getByTestId('advisor-coo').querySelector('[data-testid=advisor-toggle]')!.getAttribute('aria-expanded')).toBe('false');
+    expect(en.t('ui.room.advisor.more')).toBe('read more');
+    expect(tr.t('ui.room.advisor.more')).toBe('devamını oku');
+  });
+
+  it('+1 day advances exactly one day from the room, and waits while anything is running or pending', () => {
+    render(<DecisionRoom />);
+    const day = screen.getByTestId('room-advance-day');
+    expect(day.textContent).toContain(tr.t('ui.room.action.day'));
+    expect(day.getAttribute('aria-label')).toBe(tr.t('ui.room.action.day.aria'));
+    fireEvent.click(day);
+    fireEvent.click(day);
+    expect(sent).toEqual([{ type: 'advance', days: 1 }]);
+    expect(useGame.getState().advancePending).toBe(true);
+    expect(day.getAttribute('aria-disabled')).toBe('true');
+    // a decision being sent, or auto-play, keeps the clock where it is
+    act(() => useGame.setState({ advancePending: false, room: { ...useGame.getState().room!, pending: 'analysis' } }));
+    fireEvent.click(day);
+    act(() => useGame.setState({ room: { ...useGame.getState().room!, pending: null }, playing: true }));
+    expect(day.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(day);
+    expect(sent).toHaveLength(1);
+    act(() => useGame.setState({ playing: false }));
+    expect(day.getAttribute('aria-disabled')).toBe('false');
+  });
+
   it('while its figures are for an older day the room shows no numbers', () => {
     useGame.setState({ version: 4 });
     render(<DecisionRoom />);

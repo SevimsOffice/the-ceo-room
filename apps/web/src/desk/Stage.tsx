@@ -1,6 +1,8 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { useT } from '../i18n';
 import { WoodGrain } from './Atmosphere';
+import { Credit } from '../credit/Credit';
+import { CREDIT_H } from '../credit/credit';
 
 export const SCENE_W = 1440;
 export const SCENE_H = 900;
@@ -24,23 +26,23 @@ function useViewport(): { w: number; h: number } {
   return vp;
 }
 
-/** The scale of the scene in a window: fit, but never below MIN_SCALE. */
+/** The scale of the scene in a window (above the credit strip): fit, but never below MIN_SCALE. */
 export function sceneScale(w: number, h: number): number {
-  return Math.max(MIN_SCALE, Math.min(w / SCENE_W, h / SCENE_H));
+  return Math.max(MIN_SCALE, Math.min(w / SCENE_W, (h - CREDIT_H) / SCENE_H));
 }
 
 /**
- * The 1440×900 scene, scaled to fit the window (≥1280 px wide, never below MIN_SCALE: a shorter
- * window scrolls); narrower windows get a note.
+ * The 1440×900 scene, scaled to fit the window above the credit strip (≥1280 px wide, never below
+ * MIN_SCALE: a shorter window scrolls, the credit under the scene); narrower windows get a note.
  */
 export function Stage({ children }: { children: ReactNode }) {
   const { w, h } = useViewport();
   if (w < MIN_WIDTH) return <SmallScreenNote />;
   const scale = sceneScale(w, h);
-  const fits = SCENE_H * scale <= h + 0.5;
+  const fits = SCENE_H * scale + CREDIT_H <= h + 0.5;
   return (
-    <div className={`fixed inset-0 bg-room ${fits ? 'flex items-center justify-center overflow-hidden' : 'overflow-auto'}`} data-testid="stage">
-      <div style={{ width: SCENE_W * scale, height: SCENE_H * scale, position: 'relative', margin: fits ? undefined : '0 auto' }}>
+    <div className={`fixed inset-0 bg-room ${fits ? 'flex flex-col items-center justify-center overflow-hidden' : 'overflow-auto'}`} data-testid="stage">
+      <div style={{ width: SCENE_W * scale, height: SCENE_H * scale, position: 'relative', margin: fits ? undefined : '0 auto', flex: 'none' }}>
         <div
           data-testid="scene"
           style={{ width: SCENE_W, height: SCENE_H, transform: `scale(${scale})`, transformOrigin: '0 0', position: 'absolute', left: 0, top: 0 }}
@@ -48,6 +50,7 @@ export function Stage({ children }: { children: ReactNode }) {
           {children}
         </div>
       </div>
+      <Credit className="flex-none" />
     </div>
   );
 }
@@ -64,6 +67,7 @@ function SmallScreenNote() {
         <p className="mt-3 font-hand text-xl font-semibold italic leading-snug" style={{ color: '#5a2a14' }}>
           {t.t('ui.small.body')}
         </p>
+        <Credit className="mt-5" />
       </div>
     </main>
   );

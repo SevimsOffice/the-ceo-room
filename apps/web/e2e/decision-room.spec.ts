@@ -11,6 +11,7 @@ import {
 import { createTranslator, formatMoneyParts } from '@ceo-room/i18n';
 import { loadSeed } from '@ceo-room/seed-data';
 import { deltaCell } from '../src/room/impact';
+import { CREDIT } from '../src/credit/credit';
 
 // The same engine the worker runs (seed, rngSeed 42): every expected figure comes from its selectors.
 const seed = loadSeed();
@@ -48,6 +49,31 @@ async function openSteelRoom(page: Page) {
 }
 
 const scene = (page: Page) => page.getByTestId('desk');
+
+/** Wait a day from inside the Decision Room (+1 day); the room is back, recalculated, for `day`. */
+async function roomDay(page: Page, day: number) {
+  await page.getByTestId('room-advance-day').click();
+  await expect(page.getByTestId('header-day')).toContainText(new RegExp(`(Gün|Day) ${day} `));
+}
+
+/** Both side columns of the room show everything without scrolling, inside a 1440×900 window. */
+async function expectRoomFits(page: Page) {
+  for (const id of ['room-left', 'room-counsel']) {
+    const m = await page.getByTestId(id).evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }));
+    expect(m.sh, `${id} overflows`).toBeLessThanOrEqual(m.ch);
+  }
+  const vp = page.viewportSize()!;
+  const within = async (testId: string, columnId: string) => {
+    const box = (await page.getByTestId(testId).boundingBox())!;
+    const col = (await page.getByTestId(columnId).boundingBox())!;
+    expect(box.y, testId).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height, testId).toBeLessThanOrEqual(vp.height);
+    expect(box.y + box.height, `${testId} inside ${columnId}`).toBeLessThanOrEqual(col.y + col.height + 1);
+  };
+  await within('advisor-coo', 'room-counsel');
+  const last = await page.getByTestId('situation').locator('dd').last().getAttribute('data-testid');
+  await within(last!, 'room-left');
+}
 
 test.describe.configure({ mode: 'serial' });
 
@@ -290,6 +316,109 @@ test('a custom decision memo is previewed by the engine and sealed', async ({ pa
   await expect(page.getByTestId('report-cash-value')).toHaveText(money(e.state().cash));
 });
 
+for (const lang of ['tr', 'en'] as const) {
+  test(`at 1440×900 (${lang}) the situation and both advisors' letters fit without scrolling, also with +90`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await newGame(page);
+    if (lang === 'en') await page.getByRole('button', { name: 'English' }).click();
+    await openSteelRoom(page);
+    await expectRoomFits(page);
+    // the letters are folded: pick and first caution; "read more" unfolds the reasoning
+    const cfo = page.getByTestId('advisor-cfo');
+    await expect(cfo.getByTestId('advisor-rationale')).toBeHidden();
+    await expect(cfo.getByTestId('advisor-caveats').locator('li').first()).toBeVisible();
+    await page.getByTestId('request-analysis').click();
+    await roomDay(page, 2);
+    await expect(page.locator('[data-option=negotiate]').getByTestId('impact-horizon')).toHaveCount(3);
+    await expectRoomFits(page);
+  });
+}
+
+test('advisor letters unfold and fold with a keyboard-reachable "read more"', async ({ page }) => {
+  await newGame(page);
+  await openSteelRoom(page);
+  const coo = page.getByTestId('advisor-coo');
+  const toggle = coo.getByTestId('advisor-toggle');
+  await expect(toggle).toHaveText(/devamını oku/);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(toggle).toHaveText(/kısalt/);
+  await expect(coo.getByTestId('advisor-rationale')).toBeVisible();
+  await expect(coo.getByTestId('advisor-rationale')).toContainText('seçeneği');
+  await page.keyboard.press('Space');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(coo.getByTestId('advisor-rationale')).toBeHidden();
+});
+
+test('request analysis → +1 day in the room → the +90 column, without leaving the room', async ({ page }) => {
+  await newGame(page);
+  await openSteelRoom(page);
+  await page.getByTestId('request-analysis').click();
+  await expect(page.getByTestId('room-status')).toContainText('+1 gün');
+  await page.getByTestId('room-advance-day').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('header-day')).toContainText('Gün 2 ');
+  await expect(scene(page)).toHaveAttribute('data-view', 'room');
+  await expect(page.getByTestId('analysis-tab')).toHaveText('Analiz hazır: +90 gün eklendi');
+  await expect(page.locator('[data-option=negotiate]').getByTestId('impact-horizon')).toHaveCount(3);
+  await expect(page.locator('[data-option=negotiate]').getByTestId('impact-horizon').nth(2)).toContainText('+90 gün');
+  // exactly one day ran, and focus is back on the control once the figures are in
+  await expect(page.getByTestId('room-deadline')).toContainText('6 gün');
+  await expect(page.getByTestId('room-advance-day')).toBeFocused();
+});
+
+test('waiting past the deadline from the room closes it to the Desk with the carbon copy', async ({ page }) => {
+  await newGame(page);
+  await openSteelRoom(page);
+  for (let d = 2; d <= 7; d++) await roomDay(page, d);
+  await expect(page.getByTestId('room-deadline')).toContainText('1 gün');
+  await page.getByTestId('room-advance-day').click();
+  await expect(scene(page)).toHaveAttribute('data-view', 'desk');
+  await expect(page.getByTestId('calendar-day')).toHaveText('8');
+  await expect(page.getByTestId('tab-room')).toHaveCount(0);
+  const sheet = page.getByTestId('ledger-sheet');
+  await expect(sheet.getByTestId('ledger-sheet-title')).toContainText('1 numaralı karar');
+  await expect(sheet.getByRole('button', { name: 'Kapat' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('ledger-slip')).toHaveAttribute('data-decision', DEC);
+});
+
+test('the credit links to Instagram and LinkedIn in every view, in Turkish and English', async ({ page }) => {
+  await newGame(page);
+  const check = async () => {
+    const credit = page.getByTestId('credit');
+    await expect(credit).toBeVisible();
+    await expect(credit.getByTestId('credit-name')).toHaveText(CREDIT.name);
+    await expect(credit.getByTestId('credit-instagram')).toHaveAttribute('href', 'https://www.instagram.com/sevimsoffice/');
+    await expect(credit.getByTestId('credit-linkedin')).toHaveAttribute('href', 'https://www.linkedin.com/in/sevimdurmus/');
+    for (const id of ['credit-instagram', 'credit-linkedin']) {
+      await expect(credit.getByTestId(id)).toHaveAttribute('target', '_blank');
+      await expect(credit.getByTestId(id)).toHaveAttribute('rel', 'noopener noreferrer');
+    }
+    // the credit is under the scene, never over it
+    const sceneBox = (await page.getByTestId('scene').boundingBox())!;
+    const creditBox = (await credit.boundingBox())!;
+    expect(creditBox.y).toBeGreaterThanOrEqual(sceneBox.y + sceneBox.height - 0.5);
+  };
+  await check();
+  await expect(page.getByTestId('credit-instagram')).toHaveText('Instagram');
+  await expect(page.getByTestId('credit-linkedin')).toHaveAccessibleName(/Sevim Durmuş, LinkedIn \(yeni sekmede açılır\)/);
+  await openSteelRoom(page);
+  await check();
+  await page.getByRole('button', { name: 'English' }).click();
+  await check();
+  await expect(page.getByTestId('credit-linkedin')).toHaveAccessibleName(/Sevim Durmuş, LinkedIn \(opens in a new tab\)/);
+  await page.getByTestId('tab-desk').click();
+  await check();
+  // the small-screen note carries it too
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await expect(page.getByRole('heading', { name: 'Best viewed on a desktop' })).toBeVisible();
+  await expect(page.getByTestId('credit-instagram')).toHaveAttribute('href', 'https://www.instagram.com/sevimsoffice/');
+  await expect(page.getByTestId('credit-linkedin')).toHaveAttribute('href', 'https://www.linkedin.com/in/sevimdurmus/');
+});
+
 test('the room opens from a folder via the dossier; the Desk tab keeps it; numbers follow the day', async ({ page }) => {
   await newGame(page);
   await page.getByTestId('decision-folder').first().click();
@@ -332,19 +461,35 @@ test('at the smallest scale (1280×700) the room, the memo and the carbon copy s
         const px = parseFloat(getComputedStyle(el).fontSize) * scale;
         if (px < 12) small.push(`${px.toFixed(1)}px "${el.textContent!.trim().slice(0, 30)}"`);
       }
-      const controls = [...scene.querySelectorAll('button, select, input')].filter((b) => b.getClientRects().length > 0);
+      // the credit under the scene is drawn at screen size (no scale)
+      const credit = document.querySelector<HTMLElement>('[data-testid=credit]')!;
+      for (const el of credit.querySelectorAll<HTMLElement>('*')) {
+        if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim())) continue;
+        const px = parseFloat(getComputedStyle(el).fontSize);
+        if (px < 12) small.push(`${px.toFixed(1)}px "${el.textContent!.trim().slice(0, 30)}"`);
+      }
+      const controls = [...scene.querySelectorAll('button, select, input, a'), ...credit.querySelectorAll('a')].filter((b) => b.getClientRects().length > 0);
       const tiny = controls
         .map((b) => ({ name: b.getAttribute('aria-label') ?? b.textContent ?? b.id, r: b.getBoundingClientRect() }))
         .filter(({ r }) => r.width < 44 || r.height < 44)
         .map(({ name, r }) => `${name}: ${Math.round(r.width)}×${Math.round(r.height)}`);
       return { scale, small, tiny };
     });
+  const deskView = await measure();
+  expect(deskView.small).toEqual([]);
+  expect(deskView.tiny).toEqual([]);
   await openSteelRoom(page);
   await expect(page.getByTestId('advisor-coo')).toBeVisible();
   const roomView = await measure();
   expect(roomView.scale).toBeCloseTo(0.78, 2);
   expect(roomView.small).toEqual([]);
   expect(roomView.tiny).toEqual([]);
+  // unfolded letters follow the same floor
+  await page.getByTestId('advisor-cfo').getByTestId('advisor-toggle').click();
+  await expect(page.getByTestId('advisor-cfo').getByTestId('advisor-rationale')).toBeVisible();
+  const unfolded = await measure();
+  expect(unfolded.small).toEqual([]);
+  expect(unfolded.tiny).toEqual([]);
 
   await page.getByTestId('open-memo').click();
   await page.getByTestId('memo-qty').fill('100');

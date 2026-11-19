@@ -15,7 +15,7 @@ export const pressMs = (): number => (reducedMotion() ? 0 : PRESS_MS);
 
 /**
  * The bottom rail of the Decision Room: what is happening (status line), the custom decision memo,
- * the request for more analysis, the REJECT ink stamp (runs the default option) and the wax seal
+ * the request for more analysis, a day's wait (+1 day, the bell's advance), the REJECT ink stamp (runs the default option) and the wax seal
  * that approves the selected option. Every control sends an engine command or opens the memo.
  *
  * Controls that cannot act right now are aria-disabled (not disabled), so a pressed control keeps
@@ -30,6 +30,8 @@ export function ActionBar({ v, stamp, setStamp }: { v: RoomView; stamp: Stamp; s
   const reject = useGame((s) => s.reject);
   const requestAnalysis = useGame((s) => s.requestAnalysis);
   const openMemo = useGame((s) => s.openMemo);
+  const advanceDay = useGame((s) => s.advanceDay);
+  const playing = useGame((s) => s.playing);
   const [needOption, setNeedOption] = useState(false);
   const [pressing, setPressing] = useState(false);
   /** the control that sent the command waiting for an answer (focus returns to it if refused) */
@@ -85,6 +87,9 @@ export function ActionBar({ v, stamp, setStamp }: { v: RoomView; stamp: Stamp; s
     if (inactive) return;
     send(e.currentTarget, requestAnalysis);
   };
+  const onDay = () => {
+    if (!inactive && !playing) advanceDay();
+  };
   const onMemo = () => {
     if (!inactive) openMemo();
   };
@@ -106,10 +111,25 @@ export function ActionBar({ v, stamp, setStamp }: { v: RoomView; stamp: Stamp; s
       style={{ background: 'linear-gradient(180deg,#26130b,#140905)', borderTop: '3px solid #b8923c', boxShadow: '0 -10px 24px rgba(0,0,0,.6)' }}
       data-testid="action-bar"
     >
-      <p className="m-0 max-w-[560px] font-type text-label leading-snug text-[#efe3c4]" role="status" aria-live="polite" data-testid="room-status">
+      <p className="m-0 mr-4 max-w-[560px] font-type text-label leading-snug text-[#efe3c4]" role="status" aria-live="polite" data-testid="room-status">
         {status}
       </p>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-none items-center gap-3.5 whitespace-nowrap">
+        <button
+          type="button"
+          onClick={onDay}
+          aria-disabled={inactive || playing}
+          aria-label={t.t('ui.room.action.day.aria')}
+          className="brass press flex h-touch min-w-touch cursor-pointer items-center gap-2 rounded-[3px] px-3.5 font-type text-label font-bold aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
+          data-testid="room-advance-day"
+        >
+          <svg width="22" height="18" viewBox="0 0 22 18" aria-hidden="true">
+            <path d="M3 14 C3 7 6.5 3.5 11 3.5 C15.5 3.5 19 7 19 14 Z" fill="#5a3f10" opacity=".85" />
+            <rect x="1" y="14" width="20" height="2.6" rx="1.3" fill="#3d2a0a" />
+            <circle cx="11" cy="2.2" r="1.6" fill="#3d2a0a" />
+          </svg>
+          {t.t('ui.room.action.day')}
+        </button>
         <button
           type="button"
           onClick={onMemo}

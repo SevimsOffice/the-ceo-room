@@ -14,13 +14,13 @@ export const TONE_COLOR: Record<Tone, string> = {
 function Line({ line }: { line: ReportLine }) {
   return (
     <>
-      <div className="max-w-[200px] pb-1 font-type text-[13px] uppercase leading-tight tracking-[.08em] text-ink-muted">{line.label}</div>
+      <div className="max-w-[200px] pb-1 font-type text-label uppercase leading-tight tracking-[.04em] text-ink-muted">{line.label}</div>
       <div className="text-right">
         <div className="font-type text-[28px] font-bold leading-none text-ink" data-testid={`report-${line.id}-value`}>
           {line.value}
-          {line.unit && <span className="text-[14px] font-normal text-ink-muted"> {line.unit}</span>}
+          {line.unit && <span className="text-label font-normal text-ink-muted"> {line.unit}</span>}
         </div>
-        <div className="report-hint mt-1.5 font-type text-[13px]" style={{ color: TONE_COLOR[line.tone] }} data-testid={`report-${line.id}-note`}>
+        <div className="report-hint mt-1 font-type text-label" style={{ color: TONE_COLOR[line.tone] }} data-testid={`report-${line.id}-note`}>
           {line.note}
         </div>
       </div>
@@ -55,11 +55,11 @@ export function TypedReport() {
       <div className="relative">
         <div className="flex items-start justify-between">
           <div>
-            <div className="font-display text-[15px] font-bold uppercase tracking-[.22em]">{t.t(report.company.nameKey)}</div>
-            <div className="mt-0.5 font-type text-[13px] text-ink-muted">{report.company.city}</div>
+            <div className="font-display text-base font-bold uppercase tracking-[.22em]">{t.t(report.company.nameKey)}</div>
+            <div className="mt-0.5 font-type text-label text-ink-muted">{report.company.city}</div>
           </div>
           <div
-            className="border-[3px] border-double border-oxblood-ink px-2.5 py-1 font-type text-xs font-bold uppercase tracking-[.14em] text-oxblood-ink"
+            className="border-[3px] border-double border-oxblood-ink px-2.5 py-1 font-type text-label font-bold uppercase tracking-[.1em] text-oxblood-ink"
             style={{ transform: 'rotate(3deg)' }}
           >
             {t.t('ui.report.stamp')}
@@ -68,7 +68,7 @@ export function TypedReport() {
         <h2 id="report-title" className="m-0 mt-3 font-display text-[36px] font-extrabold leading-[1.05]">
           {t.t('ui.report.title')}
         </h2>
-        <div className="mt-1.5 font-type text-sm text-ink-muted" data-testid="report-dateline">
+        <div className="mt-1.5 font-type text-label text-ink-muted" data-testid="report-dateline">
           {t.t('ui.report.dateline', { day: report.day, weekday })}
         </div>
         <div className="mt-3 h-1.5 border-b border-t-[3px] border-ink" />

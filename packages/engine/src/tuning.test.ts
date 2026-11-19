@@ -17,6 +17,7 @@ describe('tuning.ts', () => {
     expect(tuning.DECISION_HORIZONS).toEqual([7, 30]);
     expect(tuning.OUTLOOK_HORIZONS).toEqual([7, 30, 90]);
     expect(tuning.HEALTH_RUNWAY_FULL_DAYS).toBe(180);
+    expect(tuning.RUNWAY_DANGER_DAYS).toBe(30);
     const w = tuning.HEALTH_WEIGHTS;
     expect(w.runway + w.grossMargin + w.satisfaction + w.onTimeDelivery + w.capacityStrain).toBe(100);
   });

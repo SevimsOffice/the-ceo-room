@@ -86,9 +86,11 @@ export function formatMoneyParts(kurus: number, locale: Locale, currency = 'TRY'
   const sign = currencySign(currency);
   const lira = kurus / 100;
   const abs = Math.abs(lira);
+  // the unit is chosen on the figure as printed: 999,50 TL prints as 1 000 TL, so it is "1 bin TL"
+  const printed = Math.round(abs);
   for (let i = 0; i < SCALES.length; i++) {
     const s = SCALES[i]!;
-    if (abs < s.min) continue;
+    if (printed < s.min) continue;
     let scaled = Math.round((abs / s.min) * 10) / 10;
     let scale = s;
     // 999.96 M rounds to 1000.0 M: move up one scale.
@@ -122,9 +124,13 @@ export function formatMoneyFull(kurus: number, locale: Locale, currency = 'TRY')
   return `${k < 0 ? MINUS : ''}${body} ${currencySign(currency)}`;
 }
 
-/** Signed compact money: "+1,2 milyon TL", "−450 bin TL". */
+/**
+ * Signed compact money: "+1,2 milyon TL", "−450 bin TL". The sign follows the figure as printed
+ * (same rule as formatSignedBps): 49 kuruş prints "0 TL", with no sign.
+ */
 export function formatSignedMoney(kurus: number, locale: Locale, currency = 'TRY'): string {
-  return (kurus > 0 ? '+' : '') + formatMoney(kurus, locale, currency);
+  const s = formatMoney(kurus, locale, currency);
+  return kurus > 0 && /[1-9]/.test(s) ? `+${s}` : s;
 }
 
 // ---- Percentages (basis points) ------------------------------------------------------------

@@ -5,13 +5,14 @@ import { useGame } from '../store/game';
 const LOCALES: Locale[] = ['tr', 'en'];
 
 /** Top strip: brass name plate, the room's name, today's date, language switch, new game. */
-export function Header({ onNewGame }: { onNewGame: () => void }) {
+export function Header() {
   const t = useT();
   const report = useGame((s) => s.report);
   const locale = useGame((s) => s.locale);
   const setLocale = useGame((s) => s.setLocale);
-  const busy = useGame((s) => s.busy);
-  const ready = useGame((s) => s.phase === 'ready');
+  // a new game can be asked for while loading or after a failure, but not while a day is running
+  const running = useGame((s) => s.fatal === null && (s.busy !== null || s.advancePending));
+  const askNewGame = useGame((s) => s.askNewGame);
 
   return (
     <header className="absolute left-0 top-0 z-20 flex h-[72px] w-[1440px] items-center justify-between px-[61px]">
@@ -21,7 +22,7 @@ export function Header({ onNewGame }: { onNewGame: () => void }) {
       </div>
       <div className="flex items-center gap-[14px]">
         {report && (
-          <span className="font-type text-[15px] text-[#e9dcc0]" data-testid="header-day">
+          <span className="font-type text-label text-[#e9dcc0]" data-testid="header-day">
             {t.t('ui.header.day', { day: report.day, weekday: t.t(report.weekdayCode) })}
           </span>
         )}
@@ -36,7 +37,7 @@ export function Header({ onNewGame }: { onNewGame: () => void }) {
                 aria-pressed={active}
                 aria-label={t.t(`ui.locale.${l}.name`)}
                 onClick={() => setLocale(l)}
-                className={`press flex h-11 min-w-11 items-center justify-center rounded-md px-2 font-type text-sm font-bold ${
+                className={`press flex h-touch min-w-touch items-center justify-center rounded-md px-2 font-type text-label font-bold ${
                   active ? 'brass' : 'border border-brass-edge bg-[#2a1710] text-brass-text hover:bg-[#3a2016]'
                 }`}
               >
@@ -47,9 +48,10 @@ export function Header({ onNewGame }: { onNewGame: () => void }) {
         </div>
         <button
           type="button"
-          onClick={onNewGame}
-          disabled={!ready || busy !== null}
-          className="press flex h-11 items-center rounded-md border border-brass-edge bg-[#2a1710] px-4 font-display text-[15px] font-bold tracking-[.03em] text-brass-text hover:bg-[#3a2016] disabled:opacity-50"
+          onClick={askNewGame}
+          disabled={running}
+          data-testid="new-game"
+          className="press flex h-touch items-center rounded-md border border-brass-edge bg-[#2a1710] px-4 font-display text-base font-bold tracking-[.03em] text-brass-text hover:bg-[#3a2016] disabled:opacity-50"
         >
           {t.t('ui.newGame.button')}
         </button>

@@ -25,6 +25,15 @@
   --font-display: 'Playfair Display', Georgia, serif;
   --font-hand: 'Cormorant Garamond', Georgia, serif;
   --font-type: 'Courier Prime', 'Courier New', monospace;
+
+  /*
+   * Legibility floor of the scaled scene (Stage.tsx: MIN_SCALE = 0.78, a 1280×700 window). The
+   * smallest text is 15.5 px in the 1440×900 scene (≥ 12 px on screen) and every control is at
+   * least 57 px (≥ 44 px on screen). Use text-label for small print and *-touch for controls.
+   */
+  --text-label: 15.5px;
+  --text-label--line-height: 1.3;
+  --spacing-touch: 57px;
 }
 
 html,

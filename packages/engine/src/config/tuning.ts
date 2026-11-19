@@ -108,6 +108,11 @@ export const HEALTH_ON_TIME_WINDOW_DAYS = 30;
 /** Capacity utilisation scores 100 up to COMFORT and 0 from MAX, linear between. */
 export const HEALTH_CAPACITY_COMFORT_BPS: Bps = 8500;
 export const HEALTH_CAPACITY_MAX_BPS: Bps = 12000;
+/**
+ * The Desk's runway gauge marks this many days and fewer as the danger zone (less than a month of
+ * cash). Provisional, to be calibrated.
+ */
+export const RUNWAY_DANGER_DAYS = 30;
 /** Bands by overall score (0–100), checked in order; below the last = critical. */
 export const HEALTH_BANDS = [
   { minScore: 75, band: 'good' },

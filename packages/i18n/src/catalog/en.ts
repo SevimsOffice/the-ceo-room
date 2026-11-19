@@ -277,7 +277,14 @@ export const en: Readonly<Record<string, string>> = {
 
   'ui.status.loading': 'Opening the office…',
   'ui.status.newDay': '{day:day}, {weekday:text}. The morning report is on the desk.',
-  'ui.status.restoreFailed': 'The saved game could not be loaded ({reason:text}). A new game has begun.',
+  'ui.status.restoreFailed': 'The saved game could not be loaded ({reason:text}). The old game was kept as a backup; a new game has begun.',
+  'ui.error.saveCorrupt': 'the save is damaged',
+  'ui.error.saveUnreadable': 'the save cannot be read',
+  'ui.error.saveHashMismatch': 'the replayed game does not match the saved state',
+  'ui.error.engineFailed': 'engine error: {detail:text}',
+  'ui.fatal.title': 'The desk could not be opened',
+  'ui.fatal.body': 'The simulation stopped ({reason:text}). You can start a new game; the saved game is kept as a backup.',
+  'ui.fatal.newGame': 'Start a new game',
   'ui.status.commandFailed': 'That did not go through: {reason:text}',
 
   'ui.report.title': 'Morning Report',

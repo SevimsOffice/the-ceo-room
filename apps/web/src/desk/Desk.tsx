@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useT } from '../i18n';
 import { useGame } from '../store/game';
 import { DeskPlanks, FilmGrain, LampLight, Vignette, WoodGrain } from './Atmosphere';
@@ -7,6 +6,7 @@ import { ConfirmNewGame } from './ConfirmNewGame';
 import { DecisionFolders } from './DecisionFolders';
 import { DeskBell } from './DeskBell';
 import { DossierSheet } from './DossierSheet';
+import { FatalSlip } from './FatalSlip';
 import { GaugePanel } from './GaugePanel';
 import { Header } from './Header';
 import { OrderBookSheet } from './OrderBookSheet';
@@ -19,18 +19,20 @@ import { TypedReport } from './TypedReport';
 export function Desk() {
   const t = useT();
   const loading = useGame((s) => s.report === null);
+  const failed = useGame((s) => s.fatal !== null);
   const newGame = useGame((s) => s.newGame);
-  const [confirming, setConfirming] = useState(false);
+  const confirming = useGame((s) => s.confirmingNewGame);
+  const cancelNewGame = useGame((s) => s.cancelNewGame);
 
   return (
     <div className="relative h-[900px] w-[1440px] overflow-hidden bg-desk" data-testid="desk">
       <WoodGrain />
       <DeskPlanks />
       <LampLight />
-      <Header onNewGame={() => setConfirming(true)} />
+      <Header />
       <main>
         {loading ? (
-          <p className="absolute left-0 top-[420px] w-full text-center font-hand text-3xl font-semibold italic text-cream-2" data-testid="loading">
+          !failed && <p className="absolute left-0 top-[420px] w-full text-center font-hand text-3xl font-semibold italic text-cream-2" data-testid="loading">
             {t.t('ui.status.loading')}
           </p>
         ) : (
@@ -54,15 +56,8 @@ export function Desk() {
       <FilmGrain />
       <DossierSheet />
       <OrderBookSheet />
-      {confirming && (
-        <ConfirmNewGame
-          onCancel={() => setConfirming(false)}
-          onConfirm={() => {
-            setConfirming(false);
-            newGame();
-          }}
-        />
-      )}
+      {confirming && <ConfirmNewGame onCancel={cancelNewGame} onConfirm={newGame} />}
+      <FatalSlip />
     </div>
   );
 }

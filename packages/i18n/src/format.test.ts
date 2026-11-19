@@ -36,6 +36,21 @@ describe('money (kuruş)', () => {
   it('moves up a scale when rounding reaches 1000', () => {
     expect(formatMoney(99_996_000_000, 'en')).toBe('1B TL');
   });
+  it('picks the unit after rounding: 999,50 TL prints as 1 bin TL, not 1.000 TL', () => {
+    expect(formatMoney(99_950, 'tr')).toBe('1 bin TL');
+    expect(formatMoney(99_950, 'en')).toBe('1K TL');
+    expect(formatMoneyParts(-99_950, 'tr')).toEqual({ value: `${MINUS}1`, unit: 'bin TL' });
+    expect(formatMoney(99_949, 'tr')).toBe('999 TL');
+    expect(formatMoney(99_999_950, 'en')).toBe('1M TL');
+  });
+  it('signed money: the sign is chosen after rounding (no "+0 TL")', () => {
+    expect(formatSignedMoney(49, 'tr')).toBe('0 TL');
+    expect(formatSignedMoney(49, 'en')).toBe('0 TL');
+    expect(formatSignedMoney(-49, 'en')).toBe('0 TL');
+    expect(formatSignedMoney(0, 'tr')).toBe('0 TL');
+    expect(formatSignedMoney(50, 'tr')).toBe('+1 TL');
+    expect(formatSignedMoney(99_950, 'en')).toBe('+1K TL');
+  });
   it('negative figures use a typographic minus', () => {
     expect(formatMoney(-120_000_000, 'tr')).toBe(`${MINUS}1,2 milyon TL`);
     expect(formatSignedMoney(120_000_000, 'en')).toBe('+1.2M TL');

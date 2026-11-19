@@ -25,7 +25,7 @@ function setup(withRunway: boolean, locale: 'tr' | 'en' = 'tr') {
     version: 1,
     runway: withRunway ? { version: 1, runway, health } : null,
     directory: buildDirectory(state),
-    thresholds: { capacityComfortBps: 8500, capacityMaxBps: 12000 },
+    thresholds: { capacityComfortBps: 8500, capacityMaxBps: 12000, runwayDangerDays: 30, runwayHorizonDays: 180 },
     busy: null,
     playing: false,
     orderBook: null,

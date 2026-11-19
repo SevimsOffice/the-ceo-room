@@ -10,7 +10,7 @@ const state = engine.state();
 const report = selectMorningReport(state, { includeRunway: false });
 const runway = selectProjectedRunway(state);
 const health = selectOverallHealth(state, runway);
-const thresholds = { capacityComfortBps: 8500, capacityMaxBps: 12000 };
+const thresholds = { capacityComfortBps: 8500, capacityMaxBps: 12000, runwayDangerDays: 30, runwayHorizonDays: 180 };
 const tr = createTranslator('tr', { directory: buildDirectory(state) });
 const en = createTranslator('en', { directory: buildDirectory(state) });
 

@@ -30,7 +30,7 @@ export function DecisionFolders() {
 
   return (
     <section aria-labelledby="decisions-heading" className="w-[290px]">
-      <h2 id="decisions-heading" className="brass m-0 inline-block rounded-[3px] px-4 py-1.5 font-display text-sm font-bold tracking-[.08em]">
+      <h2 id="decisions-heading" className="brass m-0 inline-block rounded-[3px] px-4 py-1.5 font-display text-label font-bold tracking-[.08em]">
         {t.t('ui.decisions.heading')}
       </h2>
       <div className="relative mt-10 h-[350px]">
@@ -60,10 +60,10 @@ export function DecisionFolders() {
                 className="absolute inset-0 box-border block rounded-b rounded-tr-md px-4 py-3.5"
                 style={{ background: c.bg, color: c.fg, boxShadow: '0 -2px 8px rgba(0,0,0,.35),0 12px 20px rgba(0,0,0,.5)' }}
               >
-                <span className="block font-type text-xs tracking-[.08em]">{t.t('ui.folder.number', { n })}</span>
+                <span className="block font-type text-label tracking-[.08em]">{t.t('ui.folder.number', { n })}</span>
                 <span className="mt-1 block font-display text-lg font-bold leading-tight">{title}</span>
-                <span className="mt-0.5 block truncate font-type text-[13px]">{whoName}</span>
-                <span className="mt-2 block font-type text-[13px] font-bold">{daysLeftText(t, d.daysLeft)}</span>
+                <span className="mt-0.5 block truncate font-type text-label">{whoName}</span>
+                <span className="mt-1.5 block font-type text-label font-bold">{daysLeftText(t, d.daysLeft)}</span>
               </span>
             </button>
           );

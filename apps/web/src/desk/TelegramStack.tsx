@@ -48,23 +48,23 @@ function Telegram({ tg, index, expanded, onToggle, isNew }: { tg: TelegramView; 
         onClick={onToggle}
         className="block w-full cursor-pointer border-0 bg-transparent p-0 text-left"
       >
-        <span className="flex justify-between bg-[#2b1d14] px-3.5 py-[5px] font-type text-xs tracking-[.2em] text-[#e9dcc0]">
+        <span className="flex justify-between bg-[#2b1d14] px-3.5 py-[5px] font-type text-label tracking-[.12em] text-[#e9dcc0]">
           <span>{t.t('ui.telegram.form')}</span>
           <span>{t.t('ui.telegram.number', { n: telegramNumber(tg.id) })}</span>
         </span>
         <span className="block px-4 pb-3 pt-2.5">
-          <span className={`block font-type text-[15px] font-bold leading-[1.3] ${expanded ? '' : 'line-clamp-3'}`} data-testid="telegram-text">
+          <span className={`block font-type text-label font-bold leading-[1.3] ${expanded ? '' : 'line-clamp-3'}`} data-testid="telegram-text">
             {text}
           </span>
           <span className="mt-2 flex items-center justify-between">
             <span
-              className="inline-block border-2 px-2 py-0.5 font-type text-xs font-bold tracking-[.14em]"
+              className="inline-block border-2 px-2 py-0.5 font-type text-label font-bold tracking-[.1em]"
               style={{ borderColor: SEVERITY_COLOR[tg.severity], color: SEVERITY_COLOR[tg.severity], transform: 'rotate(-3deg)' }}
             >
               {t.t(`ui.telegram.severity.${tg.severity}`)}
             </span>
             {read && (
-              <span className="font-type text-xs font-bold tracking-[.2em] text-ink-muted" style={{ transform: 'rotate(2deg)' }} data-testid="telegram-read">
+              <span className="font-type text-label font-bold tracking-[.14em] text-ink-muted" style={{ transform: 'rotate(2deg)' }} data-testid="telegram-read">
                 {t.t('ui.telegram.readStamp')}
               </span>
             )}
@@ -72,7 +72,7 @@ function Telegram({ tg, index, expanded, onToggle, isNew }: { tg: TelegramView; 
         </span>
       </button>
       {expanded && (
-        <div id={panelId} className="border-t border-dashed border-[#8a7350] px-4 pb-3 pt-2 font-type text-[13px] text-ink">
+        <div id={panelId} className="border-t border-dashed border-[#8a7350] px-4 pb-3 pt-2 font-type text-label text-ink">
           <p className="m-0 text-ink-muted">{t.t('ui.telegram.received', { day: tg.day })}</p>
           {tg.decisionId ? (
             <>
@@ -80,7 +80,7 @@ function Telegram({ tg, index, expanded, onToggle, isNew }: { tg: TelegramView; 
               <button
                 type="button"
                 onClick={() => openDossier(tg.decisionId!)}
-                className="press mt-2 min-h-11 cursor-pointer rounded-sm border border-[#6a2428] bg-[#6a2428] px-3 font-type text-[13px] font-bold text-cream-2 hover:bg-[#7d2a2f]"
+                className="press mt-2 min-h-touch cursor-pointer rounded-sm border border-[#6a2428] bg-[#6a2428] px-3 font-type text-label font-bold text-cream-2 hover:bg-[#7d2a2f]"
               >
                 {t.t('ui.telegram.openFolder', { n: decisionNumber(tg.decisionId) })}
               </button>
@@ -92,7 +92,7 @@ function Telegram({ tg, index, expanded, onToggle, isNew }: { tg: TelegramView; 
             <button
               type="button"
               onClick={openOrderBook}
-              className="press ml-0 mt-2 block min-h-11 cursor-pointer rounded-sm border border-[#2f4a3a] bg-[#2f4a3a] px-3 font-type text-[13px] font-bold text-cream-2 hover:bg-[#3a5a47]"
+              className="press ml-0 mt-2 block min-h-touch cursor-pointer rounded-sm border border-[#2f4a3a] bg-[#2f4a3a] px-3 font-type text-label font-bold text-cream-2 hover:bg-[#3a5a47]"
             >
               {t.t('ui.telegram.openOrderBook')}
             </button>
@@ -139,7 +139,7 @@ export function TelegramStack() {
         <h2 id="telegrams-heading" className="m-0 font-display text-2xl font-medium italic leading-tight text-cream-2">
           {t.t('ui.telegrams.heading')}
         </h2>
-        <div className="mt-1.5 whitespace-nowrap font-type text-[13px] text-brass-text" data-testid="telegram-count">
+        <div className="mt-1.5 font-type text-label leading-tight text-brass-text" data-testid="telegram-count">
           {t.t('ui.telegrams.count', { total: telegrams.length, unread })}
         </div>
       </div>

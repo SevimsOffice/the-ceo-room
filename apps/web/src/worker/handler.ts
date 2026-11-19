@@ -9,19 +9,19 @@
 import {
   type Engine,
   type Msg,
-  type SaveGame,
   type SeedBundle,
   createEngine,
   fromSnapshot,
-  selectDecision,
+  selectDecisionSummary,
   selectMorningReport,
   selectOrderBook,
   selectOverallHealth,
   selectProjectedRunway,
+  stateHash,
   tuning,
 } from '@ceo-room/engine';
 import { buildDirectory } from './directory';
-import type { DossierView, WorkerRequest, WorkerResponse } from './protocol';
+import type { DossierView, StoredSave, WorkerRequest, WorkerResponse } from './protocol';
 
 /** One fixed simulation per browser (V1): the seed's NOVARA with this RNG seed and workspace. */
 export const RNG_SEED = 42;
@@ -48,6 +48,16 @@ export interface Handler {
 
 const decisionNumber = (id: string): number => Number(/(\d+)$/.exec(id)?.[1] ?? 0);
 
+/** The note posted with `fatal`: what went wrong, for the error slip. */
+export function fatalError(err: unknown): Msg {
+  return { code: 'ui.error.engineFailed', params: { detail: err instanceof Error ? err.message : String(err) } };
+}
+
+/** The save game for the current state, with the hash its replay must reach. */
+export function storedSave(e: Engine): StoredSave {
+  return { ...e.snapshot(), stateHash: stateHash(e.state()) };
+}
+
 export function createHandler(opts: HandlerOptions): Handler {
   const { seed, post } = opts;
   const dayDelayMs = opts.dayDelayMs ?? 80;
@@ -65,44 +75,68 @@ export function createHandler(opts: HandlerOptions): Handler {
   const publish = (e: Engine): void => {
     version += 1;
     post({ type: 'report', version, report: selectMorningReport(e.state(), { includeRunway: false }) });
-    post({ type: 'save', save: e.snapshot() });
+    post({ type: 'save', save: storedSave(e) });
   };
 
   /** Compute the runway (and the health score that needs it) once nothing newer is pending. */
   const scheduleRunway = (): void => {
     const v = version;
-    background = background.then(async () => {
-      await sleep(0);
-      if (v !== version || busy || !engine) return;
-      const s = engine.state();
-      const runway = selectProjectedRunway(s);
-      const health = selectOverallHealth(s, runway);
-      if (v !== version) return;
-      post({ type: 'runway', version: v, day: s.day, runway, health });
-    });
+    background = background
+      .then(async () => {
+        await sleep(0);
+        if (v !== version || busy || !engine) return;
+        const s = engine.state();
+        const runway = selectProjectedRunway(s);
+        const health = selectOverallHealth(s, runway);
+        if (v !== version) return;
+        post({ type: 'runway', version: v, day: s.day, runway, health });
+      })
+      .catch((err: unknown) => post({ type: 'fatal', error: fatalError(err) }));
   };
 
-  const start = (save: SaveGame | null): void => {
+  /**
+   * Replay a saved game. Anything that keeps it from giving the very state it was saved at counts
+   * as a failed restore: a refused replay, a malformed save that throws, a state hash that differs.
+   */
+  const restore = (save: StoredSave): { ok: true; engine: Engine } | { ok: false; error: Msg } => {
+    let r: ReturnType<typeof fromSnapshot>;
+    try {
+      r = fromSnapshot(seed, save);
+    } catch {
+      return { ok: false, error: { code: 'ui.error.saveCorrupt', params: {} } };
+    }
+    if (!r.ok) return r;
+    if (typeof save.stateHash === 'string' && stateHash(r.engine.state()) !== save.stateHash) {
+      return { ok: false, error: { code: 'ui.error.saveHashMismatch', params: {} } };
+    }
+    return r;
+  };
+
+  const start = (save: StoredSave | null, unreadable = false): void => {
     let restored = false;
-    let restoreError: Msg | null = null;
+    let restoreError: Msg | null = unreadable ? { code: 'ui.error.saveUnreadable', params: {} } : null;
+    engine = null;
     if (save) {
-      const r = fromSnapshot(seed, save);
+      const r = restore(save);
       if (r.ok) {
         engine = r.engine;
         restored = true;
       } else {
-        engine = fresh();
         restoreError = r.error;
       }
-    } else {
-      engine = fresh();
     }
+    engine ??= fresh();
     const s = engine.state();
     post({
       type: 'ready',
       directory: buildDirectory(s),
       currency: s.company.currency,
-      thresholds: { capacityComfortBps: tuning.HEALTH_CAPACITY_COMFORT_BPS, capacityMaxBps: tuning.HEALTH_CAPACITY_MAX_BPS },
+      thresholds: {
+        capacityComfortBps: tuning.HEALTH_CAPACITY_COMFORT_BPS,
+        capacityMaxBps: tuning.HEALTH_CAPACITY_MAX_BPS,
+        runwayDangerDays: tuning.RUNWAY_DANGER_DAYS,
+        runwayHorizonDays: s.settings.runwayHorizonDays,
+      },
       restored,
       restoreError,
     });
@@ -137,7 +171,8 @@ export function createHandler(opts: HandlerOptions): Handler {
   };
 
   const dossier = (e: Engine, decisionId: string): DossierView | null => {
-    const v = selectDecision(e.state(), decisionId);
+    // the summary runs no projection: the dossier is re-read after state changes
+    const v = selectDecisionSummary(e.state(), decisionId);
     if (!v) return null;
     const d = v.decision;
     return {
@@ -166,50 +201,60 @@ export function createHandler(opts: HandlerOptions): Handler {
       }
     },
     async handle(msg) {
-      if (msg.type === 'stop') {
-        stopRequested = busy;
-        return;
-      }
-      const mutating = msg.type === 'init' || msg.type === 'newGame' || msg.type === 'dispatch' || msg.type === 'advance';
-      if (mutating && busy) {
-        post({ type: 'rejected', request: msg.type, reason: 'busy' });
-        return;
-      }
-      if (msg.type === 'init') {
-        start(msg.save);
-        return;
-      }
-      if (msg.type === 'newGame') {
-        start(null);
-        return;
-      }
-      const e = engine;
-      if (!e) {
-        post({ type: 'rejected', request: msg.type, reason: 'notReady' });
-        return;
-      }
-      switch (msg.type) {
-        case 'dispatch': {
-          const r = e.dispatch(msg.command);
-          if (r.ok) {
-            post({ type: 'dispatched', ok: true, command: msg.command });
-            publish(e);
-            scheduleRunway();
-          } else {
-            post({ type: 'dispatched', ok: false, command: msg.command, error: r.error });
-          }
-          return;
-        }
-        case 'advance':
-          await advance(e, msg.days);
-          return;
-        case 'openDecision':
-          post({ type: 'dossier', decisionId: msg.decisionId, view: dossier(e, msg.decisionId) });
-          return;
-        case 'openOrderBook':
-          post({ type: 'orderBook', book: selectOrderBook(e.state()) });
-          return;
+      try {
+        // only an advance waits (between days); everything else completes in this call
+        const pending = route(msg);
+        if (pending) await pending;
+      } catch (err) {
+        post({ type: 'fatal', error: fatalError(err) });
       }
     },
   };
+
+  /** One request; exceptions are caught by handle() and posted as `fatal`. */
+  function route(msg: WorkerRequest): Promise<void> | undefined {
+    if (msg.type === 'stop') {
+      stopRequested = busy;
+      return;
+    }
+    const mutating = msg.type === 'init' || msg.type === 'newGame' || msg.type === 'dispatch' || msg.type === 'advance';
+    if (mutating && busy) {
+      post({ type: 'rejected', request: msg.type, reason: 'busy' });
+      return;
+    }
+    if (msg.type === 'init') {
+      start(msg.save, msg.unreadable === true);
+      return;
+    }
+    if (msg.type === 'newGame') {
+      start(null);
+      return;
+    }
+    const e = engine;
+    if (!e) {
+      post({ type: 'rejected', request: msg.type, reason: 'notReady' });
+      return;
+    }
+    switch (msg.type) {
+      case 'dispatch': {
+        const r = e.dispatch(msg.command);
+        if (r.ok) {
+          post({ type: 'dispatched', ok: true, command: msg.command });
+          publish(e);
+          scheduleRunway();
+        } else {
+          post({ type: 'dispatched', ok: false, command: msg.command, error: r.error });
+        }
+        return;
+      }
+      case 'advance':
+        return advance(e, msg.days);
+      case 'openDecision':
+        post({ type: 'dossier', decisionId: msg.decisionId, view: dossier(e, msg.decisionId) });
+        return;
+      case 'openOrderBook':
+        post({ type: 'orderBook', book: selectOrderBook(e.state()) });
+        return;
+    }
+  }
 }

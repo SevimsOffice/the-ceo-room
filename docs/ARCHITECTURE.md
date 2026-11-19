@@ -118,4 +118,12 @@ Integration tests assert steps 2–8 and that each option leads to a different s
   (`selectMorningReport(…, { includeRunway: false })`) and `save` (the snapshot, stored by the main
   thread in localStorage); the 180-day `runway` + overall health follow in a separate message once
   nothing newer is pending, so the report shows "calculating…" first. State changes are rejected
-  while an advance runs; `stop` interrupts it after the current day.
+  while an advance runs; `stop` interrupts it after the current day. The Desk also marks an
+  advance pending as soon as it sends one, so a double ring cannot advance twice.
+- **Save safety (M2)**: the stored save carries the `stateHash` its replay must reach. A save that
+  cannot be restored (refused replay, malformed log, hash mismatch, unreadable JSON) starts a new
+  game; the `ready` message says so before the first `save`, and the Desk copies the old save to
+  `ceo-room.save.v1.bak` first. Any exception in the worker (or a worker that fails to load) posts
+  / raises `fatal`: the Desk shows an error slip whose New game restarts the worker with no save.
+- **Dossier on the Desk** reads `selectDecisionSummary` (no projection, no impacts), re-read after
+  state changes but not during an advance; the runway row is the live projected runway.

@@ -30,8 +30,9 @@ updated, a done-vs-outstanding report, and a stop for approval.
 
 - E2E (`pnpm e2e`) runs the main journey on the built site with Playwright (Chromium) locally and
   in the Pages workflow.
-- The scene is scaled to the window; at 1280×720 small labels print at ~10 px. Revisit type
-  sizes for smaller desktops with the mobile layout.
+- The scene is scaled to the window but never below 0.78 (a 1280×700 window; shorter windows
+  scroll). Small print is 15.5 px and controls 57 px in the 1440×900 scene, so on screen text is
+  ≥ 12 px and controls ≥ 44 px (e2e checks both).
 - Telegrams with an open decision stay "new" until the Decision Room (M3) resolves them.
 
 ## Out of scope for now

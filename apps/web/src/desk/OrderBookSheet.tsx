@@ -11,7 +11,7 @@ function Cmp<T extends number | null>({ c, fmt, testId }: { c: Compared<T>; fmt:
     return (
       <span data-testid={testId} data-differs="true">
         <span className="font-bold">{fmt(c.live)}</span>
-        <span className="block whitespace-normal text-[12px] leading-snug text-oxblood-ink">{t.t('ui.orders.planToLive', { plan: fmt(c.plan), live: fmt(c.live) })}</span>
+        <span className="block whitespace-normal text-label leading-snug text-oxblood-ink">{t.t('ui.orders.planToLive', { plan: fmt(c.plan), live: fmt(c.live) })}</span>
       </span>
     );
   }
@@ -36,7 +36,7 @@ function Row({ o, t }: { o: OrderBookLine; t: Translator }) {
         <span className="block truncate" title={customer}>
           {customer}
         </span>
-        {o.blockedBy && <span className="block text-[12px] text-oxblood-ink">{t.t('ui.orders.blocked', { materialId: o.blockedBy })}</span>}
+        {o.blockedBy && <span className="block text-label text-oxblood-ink">{t.t('ui.orders.blocked', { materialId: o.blockedBy })}</span>}
       </td>
       <td className="py-2 pr-3">{product}</td>
       <td className="py-2 pr-3 text-right whitespace-nowrap">{t.t('ui.orders.progress', { done: o.unitsDone, qty: o.qty })}</td>
@@ -71,10 +71,10 @@ export function OrderBookSheet() {
   const right = new Set(['progress', 'value', 'margin']);
   return (
     <Sheet title={t.t('ui.orders.heading')} onClose={close} width={1320} testId="order-book">
-      {!book && <p className="font-type text-sm text-ink-muted">{t.t('ui.orders.loading')}</p>}
+      {!book && <p className="font-type text-label text-ink-muted">{t.t('ui.orders.loading')}</p>}
       {book && (
-        <div className="font-type text-[13.5px] text-ink">
-          <p className="m-0 mt-3 text-sm text-ink-muted" data-testid="order-book-sub">
+        <div className="font-type text-label text-ink">
+          <p className="m-0 mt-3 text-label text-ink-muted" data-testid="order-book-sub">
             {t.t('ui.orders.sub', { count: book.totals.count, value: book.totals.value, day: book.day })}
           </p>
           <p className="m-0 mt-1 font-hand text-lg font-semibold italic" style={{ color: '#5a2a14' }}>
@@ -93,7 +93,7 @@ export function OrderBookSheet() {
               <thead>
                 <tr className="border-b-2 border-ink">
                   {cols.map((c) => (
-                    <th key={c} scope="col" className={`pb-1.5 pr-3 text-[12px] font-normal uppercase tracking-[.08em] text-ink-muted ${right.has(c) ? 'text-right' : 'text-left'}`}>
+                    <th key={c} scope="col" className={`pb-1.5 pr-3 text-label font-normal uppercase tracking-[.02em] text-ink-muted ${right.has(c) ? 'text-right' : 'text-left'}`}>
                       {t.t(`ui.orders.col.${c}`)}
                     </th>
                   ))}

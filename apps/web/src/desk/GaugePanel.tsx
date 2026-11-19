@@ -17,6 +17,10 @@ export function GaugePanel() {
   const comfort = thresholds?.capacityComfortBps ?? 10000;
   const runway = live?.runway ?? null;
   const rText = runwayText(t, runway);
+  // danger zone: the ticks at or below the engine's RUNWAY_DANGER_DAYS (tick i = i/10 of the horizon)
+  const horizon = runway?.horizonDays ?? thresholds?.runwayHorizonDays ?? null;
+  const danger = thresholds?.runwayDangerDays ?? null;
+  const runwayWarn = (i: number): boolean => horizon !== null && danger !== null && (i * horizon) / 10 <= danger;
   return (
     <div className="flex w-[290px] gap-3 rounded border border-brass-edge bg-panel p-3.5" style={{ boxShadow: '0 10px 20px rgba(0,0,0,.5)' }}>
       <BrassGauge
@@ -34,7 +38,7 @@ export function GaugePanel() {
         label={t.t('ui.gauge.runway')}
         value={rText}
         fraction={runway ? (runway.capped ? 1 : runway.days / runway.horizonDays) : null}
-        warn={(i) => i <= 1}
+        warn={runwayWarn}
         ariaLabel={t.t('ui.gauge.runway.aria', { value: rText })}
       />
     </div>

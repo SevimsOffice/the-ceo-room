@@ -6,7 +6,7 @@ import { useGame } from '../store/game';
 export function DeskBell() {
   const t = useT();
   const ready = useGame((s) => s.phase === 'ready');
-  const busy = useGame((s) => s.busy !== null);
+  const busy = useGame((s) => s.busy !== null || s.advancePending || s.fatal !== null);
   const playing = useGame((s) => s.playing);
   const advance = useGame((s) => s.advance);
   const [ring, setRing] = useState(0);

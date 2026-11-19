@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createEngine, fromSnapshot, selectMorningReport, selectProjectedRunway, stateHash, type SaveGame } from '@ceo-room/engine';
+import { createEngine, fromSnapshot, selectDecisionSummary, selectMorningReport, selectProjectedRunway, stateHash, tuning, type SaveGame, type SeedBundle } from '@ceo-room/engine';
 import { loadSeed } from '@ceo-room/seed-data';
 import { RNG_SEED, WORKSPACE_ID, createHandler } from './handler';
-import type { WorkerResponse } from './protocol';
+import type { StoredSave, WorkerResponse } from './protocol';
 
 const seed = loadSeed();
 
@@ -162,6 +162,97 @@ describe('engine worker handler', () => {
     expect(ofType(out, 'report')[0]!.report.day).toBe(1);
   });
 
+  it('each save carries the stateHash of the state it was taken at', async () => {
+    const { h, out } = setup();
+    await h.handle({ type: 'init', save: null });
+    await h.handle({ type: 'advance', days: 3 });
+    const save = ofType(out, 'save').at(-1)!.save;
+    expect(save.stateHash).toBe(stateHash(h.engine()!.state()));
+  });
+
+  it('a save whose replay does not reach its stateHash is a failed restore: new game, typed note', async () => {
+    const a = setup();
+    await a.h.handle({ type: 'init', save: null });
+    await a.h.handle({ type: 'advance', days: 4 });
+    const save: StoredSave = { ...ofType(a.out, 'save').at(-1)!.save, stateHash: 'deadbeef' };
+
+    const { h, out } = setup();
+    await h.handle({ type: 'init', save });
+    const ready = ofType(out, 'ready')[0]!;
+    expect(ready.restored).toBe(false);
+    expect(ready.restoreError?.code).toBe('ui.error.saveHashMismatch');
+    expect(ofType(out, 'report')[0]!.report.day).toBe(1);
+    // the note comes before the first save, so the Desk can back the old one up first
+    expect(out.findIndex((m) => m.type === 'ready')).toBeLessThan(out.findIndex((m) => m.type === 'save'));
+  });
+
+  it('a malformed log entry (null) falls back to a new game instead of throwing', async () => {
+    const good = setup();
+    await good.h.handle({ type: 'init', save: null });
+    const base = ofType(good.out, 'save')[0]!.save;
+    const save = { ...base, stateHash: undefined, log: [null] } as unknown as StoredSave;
+
+    const { h, out } = setup();
+    await h.handle({ type: 'init', save });
+    expect(ofType(out, 'fatal')).toEqual([]);
+    const ready = ofType(out, 'ready')[0]!;
+    expect(ready.restored).toBe(false);
+    expect(ready.restoreError?.code).toBe('ui.error.saveCorrupt');
+    expect(ofType(out, 'report')[0]!.report.day).toBe(1);
+    // the game goes on
+    await h.handle({ type: 'advance', days: 1 });
+    expect(ofType(out, 'report').at(-1)!.report.day).toBe(2);
+  });
+
+  it('an unreadable stored save is reported as a failed restore', async () => {
+    const { h, out } = setup();
+    await h.handle({ type: 'init', save: null, unreadable: true });
+    expect(ofType(out, 'ready')[0]!.restoreError?.code).toBe('ui.error.saveUnreadable');
+    expect(ofType(out, 'report')[0]!.report.day).toBe(1);
+  });
+
+  it('an exception while starting posts fatal (no ready, so no endless loading)', async () => {
+    const out: WorkerResponse[] = [];
+    const h = createHandler({ seed: {} as SeedBundle, post: (m) => out.push(structuredClone(m)), dayDelayMs: 0, sleep: () => Promise.resolve() });
+    await expect(h.handle({ type: 'init', save: null })).resolves.toBeUndefined();
+    expect(out.map((m) => m.type)).toEqual(['fatal']);
+    const f = ofType(out, 'fatal')[0]!;
+    expect(f.error.code).toBe('ui.error.engineFailed');
+    expect(typeof f.error.params.detail).toBe('string');
+    // a later request is answered, not left hanging
+    await h.handle({ type: 'advance', days: 1 });
+    expect(ofType(out, 'rejected')).toEqual([{ type: 'rejected', request: 'advance', reason: 'notReady' }]);
+  });
+
+  it('an exception during an advance ends the busy state and posts fatal', async () => {
+    const { h, out } = setup();
+    await h.handle({ type: 'init', save: null });
+    await h.idle();
+    out.length = 0;
+    const e = h.engine()!;
+    e.advance = () => {
+      throw new Error('boom');
+    };
+    await h.handle({ type: 'advance', days: 3 });
+    expect(out.map((m) => m.type)).toEqual(['busy', 'busy', 'fatal']);
+    expect(ofType(out, 'busy').at(-1)!.busy).toBeNull();
+    expect(ofType(out, 'fatal')[0]!.error.params.detail).toBe('boom');
+    // a new game still works afterwards
+    await h.handle({ type: 'newGame' });
+    expect(ofType(out, 'report').at(-1)!.report.day).toBe(1);
+  });
+
+  it('ready carries the engine thresholds the Desk draws with (runway danger from tuning)', async () => {
+    const { h, out } = setup();
+    await h.handle({ type: 'init', save: null });
+    expect(ofType(out, 'ready')[0]!.thresholds).toEqual({
+      capacityComfortBps: tuning.HEALTH_CAPACITY_COMFORT_BPS,
+      capacityMaxBps: tuning.HEALTH_CAPACITY_MAX_BPS,
+      runwayDangerDays: tuning.RUNWAY_DANGER_DAYS,
+      runwayHorizonDays: h.engine()!.state().settings.runwayHorizonDays,
+    });
+  });
+
   it('newGame resets to Day 1', async () => {
     const { h, out } = setup();
     await h.handle({ type: 'init', save: null });
@@ -180,6 +271,10 @@ describe('engine worker handler', () => {
     expect(d.view?.kind).toBe('supplierPrice');
     expect(d.view?.options.map((o) => o.labelKey)).toContain('option.supplierPrice.negotiate');
     expect(d.view?.figures.map((f) => f.code)).toContain('figure.cash');
+    // the light summary: no runway figure (the Desk prints the live runway), nothing projected
+    expect(d.view?.figures.map((f) => f.code)).not.toContain('figure.runwayDays');
+    const summary = selectDecisionSummary(h.engine()!.state(), 'dec-0001')!;
+    expect(d.view?.figures).toEqual(summary.supportingFigures.map((f) => ({ code: f.code, value: f.value })));
     await h.handle({ type: 'openDecision', decisionId: 'dec-9999' });
     expect(ofType(out, 'dossier')[1]!.view).toBeNull();
 

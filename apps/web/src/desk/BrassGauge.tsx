@@ -56,7 +56,7 @@ export function BrassGauge({ id, label, value, fraction, warn, ariaLabel, testId
         <circle cx={CX} cy={CY} r="6" fill={`url(#${id}-brass)`} stroke="#3d2a0a" />
       </svg>
       <figcaption className="mt-1.5 text-center">
-        <div className="min-h-[30px] font-type text-[11.5px] uppercase leading-tight tracking-[.08em] text-[#d9c9a4]">{label}</div>
+        <div className="min-h-[58px] font-type text-label uppercase leading-tight tracking-[.02em] text-[#d9c9a4]">{label}</div>
         <div className="font-type text-[19px] font-bold text-brass-bright" data-testid={testId ? `${testId}-value` : undefined}>
           {value}
         </div>

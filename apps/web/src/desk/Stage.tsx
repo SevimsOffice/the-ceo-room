@@ -6,6 +6,12 @@ export const SCENE_W = 1440;
 export const SCENE_H = 900;
 /** Below this window width the Desk asks for a larger screen. */
 export const MIN_WIDTH = 1280;
+/**
+ * The scene is never drawn smaller than this (a 1280×700 window); shorter windows scroll. The
+ * scene's smallest text (15.5 px) and controls (57 px) are sized so that, at this scale, text is
+ * still ≥ 12 px and every control ≥ 44 px on screen (styles.css: text-label, *-touch).
+ */
+export const MIN_SCALE = 0.78;
 
 function useViewport(): { w: number; h: number } {
   const get = () => ({ w: window.innerWidth, h: window.innerHeight });
@@ -18,14 +24,23 @@ function useViewport(): { w: number; h: number } {
   return vp;
 }
 
-/** The 1440×900 scene, scaled to fit the window (≥1280 px wide); smaller windows get a note. */
+/** The scale of the scene in a window: fit, but never below MIN_SCALE. */
+export function sceneScale(w: number, h: number): number {
+  return Math.max(MIN_SCALE, Math.min(w / SCENE_W, h / SCENE_H));
+}
+
+/**
+ * The 1440×900 scene, scaled to fit the window (≥1280 px wide, never below MIN_SCALE: a shorter
+ * window scrolls); narrower windows get a note.
+ */
 export function Stage({ children }: { children: ReactNode }) {
   const { w, h } = useViewport();
   if (w < MIN_WIDTH) return <SmallScreenNote />;
-  const scale = Math.min(w / SCENE_W, h / SCENE_H);
+  const scale = sceneScale(w, h);
+  const fits = SCENE_H * scale <= h + 0.5;
   return (
-    <div className="fixed inset-0 flex items-center justify-center overflow-hidden bg-room">
-      <div style={{ width: SCENE_W * scale, height: SCENE_H * scale, position: 'relative' }}>
+    <div className={`fixed inset-0 bg-room ${fits ? 'flex items-center justify-center overflow-hidden' : 'overflow-auto'}`} data-testid="stage">
+      <div style={{ width: SCENE_W * scale, height: SCENE_H * scale, position: 'relative', margin: fits ? undefined : '0 auto' }}>
         <div
           data-testid="scene"
           style={{ width: SCENE_W, height: SCENE_H, transform: `scale(${scale})`, transformOrigin: '0 0', position: 'absolute', left: 0, top: 0 }}

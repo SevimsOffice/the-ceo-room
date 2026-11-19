@@ -11,10 +11,10 @@ function Leaf({ day, weekday, label, className = '', testId }: { day: string; we
       style={{ background: '#efe5c9', boxShadow: '0 12px 20px rgba(0,0,0,.55)', transform: 'rotate(1.5deg)' }}
       data-testid={testId}
     >
-      <div className="flex h-[30px] items-center justify-center font-type text-[13px] font-bold tracking-[.3em]" style={{ background: '#6a1c1f', color: '#efe0c2' }}>
+      <div className="flex h-[30px] items-center justify-center font-type text-label font-bold tracking-[.3em]" style={{ background: '#6a1c1f', color: '#efe0c2' }}>
         {label}
       </div>
-      <div className="mt-1.5 text-center font-display text-[84px] font-extrabold leading-[1.05]" data-testid={testId ? `${testId}-day` : undefined}>
+      <div className="mt-1.5 text-center font-type text-[84px] font-bold leading-[1.05]" data-testid={testId ? `${testId}-day` : undefined}>
         {day}
       </div>
       <div className="text-center font-display text-xl italic">{weekday}</div>

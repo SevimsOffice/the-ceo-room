@@ -15,7 +15,17 @@ import type { Directory } from '@ceo-room/i18n';
 
 export type DeskReport = MorningReportWithoutRunway;
 
-/** The read-only dossier of a decision (from selectDecision), without the option impacts. */
+/**
+ * The save game as the Desk stores it: the engine's SaveGame plus the stateHash of the state it
+ * leads to. After replay the hash is checked; a mismatch counts as a failed restore. Saves written
+ * before the hash was added have none and are accepted on replay alone.
+ */
+export type StoredSave = SaveGame & { stateHash?: string };
+
+/**
+ * The read-only dossier of a decision (from selectDecisionSummary): no option impacts and no
+ * forward run. The runway is not among `figures`; the Desk prints the live projected runway.
+ */
 export interface DossierView {
   id: string;
   /** folder number on the desk (from the decision id: dec-0002 → 2) */
@@ -35,11 +45,15 @@ export interface DossierView {
 export interface DeskThresholds {
   capacityComfortBps: number;
   capacityMaxBps: number;
+  /** runway gauge danger zone: this many days and fewer (tuning.RUNWAY_DANGER_DAYS) */
+  runwayDangerDays: number;
+  /** the runway projection's horizon (settings.runwayHorizonDays): the gauge's full sweep */
+  runwayHorizonDays: number;
 }
 
 export type WorkerRequest =
   /** start the engine, from a saved game when given */
-  | { type: 'init'; save: SaveGame | null }
+  | { type: 'init'; save: StoredSave | null; unreadable?: boolean }
   /** throw the game away and start again at Day 1 */
   | { type: 'newGame' }
   | { type: 'dispatch'; command: Command }
@@ -57,15 +71,20 @@ export type WorkerResponse =
       currency: string;
       thresholds: DeskThresholds;
       restored: boolean;
-      /** set when a saved game was given but could not be replayed (a new game started instead) */
+      /**
+       * set when a saved game was given but could not be restored (a new game started instead).
+       * Posted before the first `save`, so the Desk can keep the old save as a backup first.
+       */
       restoreError: Msg | null;
     }
+  /** the engine failed (an exception in the worker): the Desk offers a new game */
+  | { type: 'fatal'; error: Msg }
   /** the morning report after every state change; `version` increases with each change */
   | { type: 'report'; version: number; report: DeskReport }
   /** the projected runway and overall health for report `version`, computed after it was posted */
   | { type: 'runway'; version: number; day: number; runway: Runway; health: OverallHealth }
   /** the save game after every state change (the Desk stores it) */
-  | { type: 'save'; save: SaveGame }
+  | { type: 'save'; save: StoredSave }
   /** an advance started (busy) or ended (null) */
   | { type: 'busy'; busy: { fromDay: number; toDay: number } | null; interrupted?: boolean }
   | { type: 'dispatched'; ok: true; command: Command }

@@ -81,7 +81,7 @@ export function Sheet({
               type="button"
               onClick={onClose}
               data-autofocus
-              className="press min-h-11 shrink-0 cursor-pointer rounded-sm border-2 border-ink bg-transparent px-4 font-type text-sm font-bold uppercase tracking-[.12em] text-ink hover:bg-[rgba(36,26,16,.08)]"
+              className="press min-h-touch shrink-0 cursor-pointer rounded-sm border-2 border-ink bg-transparent px-4 font-type text-label font-bold uppercase tracking-[.12em] text-ink hover:bg-[rgba(36,26,16,.08)]"
             >
               {t.t('ui.sheet.close')}
             </button>

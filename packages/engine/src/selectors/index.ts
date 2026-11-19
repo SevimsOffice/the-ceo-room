@@ -150,15 +150,11 @@ export interface DecisionView {
   analysis: { requestedDay: SimDay; readyDay: SimDay; ready: boolean; extended: DecisionImpacts | null } | null;
 }
 
-/** Decision Room: situation, supporting figures, options with +7 / +30 impacts from project(). */
-export function selectDecision(s: CompanyState, decisionId: string): DecisionView | null {
-  const d = s.decisions.find((x) => x.id === decisionId);
-  if (!d) return null;
-  const runway = projectedRunway(s);
+/** The supporting figures that need no forward run (everything but the projected runway). */
+function plainFigures(s: CompanyState, d: Decision): DecisionView['supportingFigures'] {
   const bl = backlog(s);
   const figures: DecisionView['supportingFigures'] = [
     { code: 'figure.cash', selector: 'selectMorningReport.cash', value: s.cash },
-    { code: 'figure.runwayDays', selector: 'selectMorningReport.runway.days', value: runway.days },
     { code: 'figure.backlogValue', selector: 'selectMorningReport.backlog.value', value: bl.value },
     { code: 'figure.grossMarginBps', selector: 'selectMorningReport.grossMarginBps', value: bookMarginBps(s, s.day) },
   ];
@@ -168,6 +164,20 @@ export function selectDecision(s: CompanyState, decisionId: string): DecisionVie
     figures.push({ code: 'figure.affectedOrders', selector: `orders[bom includes ${materialId}].count`, value: affected.length });
     figures.push({ code: 'figure.affectedOrderValue', selector: `orders[bom includes ${materialId}].value`, value: affected.reduce((t, o) => t + o.value, 0) });
   }
+  return figures;
+}
+
+/** Decision Room: situation, supporting figures, options with +7 / +30 impacts from project(). */
+export function selectDecision(s: CompanyState, decisionId: string): DecisionView | null {
+  const d = s.decisions.find((x) => x.id === decisionId);
+  if (!d) return null;
+  const runway = projectedRunway(s);
+  const [cash, ...rest] = plainFigures(s, d);
+  const figures: DecisionView['supportingFigures'] = [
+    cash!,
+    { code: 'figure.runwayDays', selector: 'selectMorningReport.runway.days', value: runway.days },
+    ...rest,
+  ];
   const open = d.status === 'open';
   const ready = d.analysis !== null && s.day >= d.analysis.readyDay;
   return {
@@ -179,6 +189,23 @@ export function selectDecision(s: CompanyState, decisionId: string): DecisionVie
       ? { ...d.analysis, ready, extended: ready && open ? decisionImpacts(s, d.id, OUTLOOK_HORIZONS) : null }
       : null,
   };
+}
+
+export interface DecisionSummary {
+  decision: Decision;
+  situation: Msg;
+  /** selectDecision's supporting figures without the projected runway (read it from selectProjectedRunway) */
+  supportingFigures: DecisionView['supportingFigures'];
+}
+
+/**
+ * A decision's dossier without any forward run: no option impacts, no analysis, no runway. Cheap
+ * enough to re-read after every state change; the Decision Room uses selectDecision.
+ */
+export function selectDecisionSummary(s: CompanyState, decisionId: string): DecisionSummary | null {
+  const d = s.decisions.find((x) => x.id === decisionId);
+  if (!d) return null;
+  return { decision: d, situation: d.situation, supportingFigures: plainFigures(s, d) };
 }
 
 /**

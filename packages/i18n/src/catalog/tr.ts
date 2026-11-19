@@ -277,7 +277,14 @@ export const tr: Readonly<Record<string, string>> = {
 
   'ui.status.loading': 'Ofis açılıyor…',
   'ui.status.newDay': '{day:day}, {weekday:text}. Sabah raporu masada.',
-  'ui.status.restoreFailed': 'Kayıtlı oyun yüklenemedi ({reason:text}). Yeni bir oyun başladı.',
+  'ui.status.restoreFailed': 'Kayıtlı oyun yüklenemedi ({reason:text}). Eski oyun yedek olarak saklandı; yeni bir oyun başladı.',
+  'ui.error.saveCorrupt': 'kayıt bozuk',
+  'ui.error.saveUnreadable': 'kayıt okunamıyor',
+  'ui.error.saveHashMismatch': 'yeniden oynanan oyun kaydedilen durumla aynı değil',
+  'ui.error.engineFailed': 'motor hatası: {detail:text}',
+  'ui.fatal.title': 'Masa açılamadı',
+  'ui.fatal.body': 'Simülasyon durdu ({reason:text}). Yeni bir oyun başlatabilirsiniz; kayıtlı oyun yedek olarak saklanır.',
+  'ui.fatal.newGame': 'Yeni oyun başlat',
   'ui.status.commandFailed': 'İşlem yapılamadı: {reason:text}',
 
   'ui.report.title': 'Sabah Raporu',

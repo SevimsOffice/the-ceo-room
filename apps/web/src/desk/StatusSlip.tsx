@@ -15,7 +15,7 @@ export function StatusSlip() {
       {notice && (
         <div
           role="status"
-          className="on-paper absolute bottom-[34px] left-[61px] z-20 w-[290px] px-4 py-3 font-type text-[13px] leading-snug"
+          className="on-paper absolute bottom-[34px] left-[61px] z-20 w-[290px] px-4 py-3 font-type text-label leading-snug"
           style={{ background: '#e4d3a4', color: '#241a10', transform: 'rotate(-1deg)', boxShadow: '0 10px 18px rgba(0,0,0,.5)' }}
           data-testid="status-slip"
         >
@@ -23,7 +23,7 @@ export function StatusSlip() {
           <button
             type="button"
             onClick={dismiss}
-            className="press mt-2 min-h-11 cursor-pointer rounded-sm border-2 border-ink bg-transparent px-3 font-type text-xs font-bold uppercase tracking-[.12em] text-ink"
+            className="press mt-2 min-h-touch cursor-pointer rounded-sm border-2 border-ink bg-transparent px-3 font-type text-label font-bold uppercase tracking-[.12em] text-ink"
           >
             {t.t('ui.sheet.close')}
           </button>

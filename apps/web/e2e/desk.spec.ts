@@ -95,9 +95,12 @@ test('folders open a read-only dossier; pause interrupts a jump; new game asks f
   await page.reload();
   await expect(page.getByTestId('calendar-day')).toHaveText('1');
 
+  await expect(page.getByTestId('gauge-runway-value')).toHaveText(/\d/);
   await page.getByTestId('decision-folder').first().click();
   const dossier = page.getByTestId('dossier');
   await expect(dossier.getByTestId('dossier-options').locator('li')).toHaveCount(4);
+  // the dossier prints the same live runway as the report (capped as "180+ gün")
+  await expect(dossier.getByTestId('dossier-runway-value')).toHaveText((await page.getByTestId('gauge-runway-value').textContent())!);
   await expect(dossier.getByTestId('dossier-room-note')).toContainText('Karar Odası');
   await dossier.getByRole('button', { name: 'Kapat' }).click();
   await expect(dossier).toHaveCount(0);
@@ -127,10 +130,125 @@ test('a saved game that cannot be replayed starts a new game and says so', async
   await page.evaluate(() =>
     localStorage.setItem('ceo-room.save.v1', JSON.stringify({ format: 1, seedVersion: 999, rngSeed: 42, workspaceId: 'ws_desk', log: [] })),
   );
+  const old = await page.evaluate(() => localStorage.getItem('ceo-room.save.v1'));
   await page.reload();
   await expect(page.getByTestId('calendar-day')).toHaveText('1');
   const slip = page.getByTestId('status-slip');
   await expect(slip).toContainText('Kayıtlı oyun yüklenemedi');
+  await expect(slip).toContainText('yedek olarak saklandı');
+  // the old save is kept in the backup key; the new game has its own save
+  expect(await page.evaluate(() => localStorage.getItem('ceo-room.save.v1.bak'))).toBe(old);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('ceo-room.save.v1') ?? '{}').log)).toEqual([]);
   await slip.getByRole('button').click();
   await expect(slip).toHaveCount(0);
+});
+
+test('a save with a malformed log entry opens a new game, never an endless loading screen', async ({ page }) => {
+  await page.goto('./');
+  await page.evaluate(() =>
+    localStorage.setItem('ceo-room.save.v1', JSON.stringify({ format: 1, seedVersion: 1, rngSeed: 42, workspaceId: 'ws_desk', log: [null] })),
+  );
+  await page.reload();
+  await expect(page.getByTestId('calendar-day')).toHaveText('1');
+  await expect(page.getByTestId('loading')).toHaveCount(0);
+  await expect(page.getByTestId('status-slip')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('ceo-room.save.v1.bak'))).toContain('"log":[null]');
+});
+
+test('a double-click on the bell advances exactly one day', async ({ page }) => {
+  await page.goto('./');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(page.getByTestId('calendar-day')).toHaveText('1');
+  await page.getByTestId('desk-bell').dblclick();
+  await expect(page.getByTestId('calendar-day')).toHaveText('2');
+  await expect(page.getByTestId('desk-bell')).toBeEnabled();
+  await page.waitForTimeout(600);
+  await expect(page.getByTestId('calendar-day')).toHaveText('2');
+});
+
+test('at 1280×720 the bell, dial, language and new-game controls are at least 44 px', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('./');
+  await expect(page.getByTestId('calendar-day')).toBeVisible();
+  const controls = [
+    page.getByTestId('desk-bell'),
+    page.getByTestId('advance-week'),
+    page.getByTestId('advance-month'),
+    page.getByTestId('play-pause'),
+    page.getByRole('button', { name: 'Türkçe' }),
+    page.getByRole('button', { name: 'English' }),
+    page.getByTestId('new-game'),
+  ];
+  for (const c of controls) {
+    const box = (await c.boundingBox())!;
+    expect(box.width, await c.getAttribute('aria-label') ?? '').toBeGreaterThanOrEqual(44);
+    expect(box.height, await c.getAttribute('aria-label') ?? '').toBeGreaterThanOrEqual(44);
+  }
+  // play / pause is a drawn glyph, named by the button
+  await expect(page.getByTestId('play-pause').getByTestId('play-glyph')).toHaveAttribute('aria-hidden', 'true');
+  await expect(page.getByTestId('play-pause')).toHaveAttribute('aria-label', /Oynat/);
+  // the calendar's day number is typed (Courier Prime), like every figure
+  expect(await page.getByTestId('calendar-day').evaluate((el) => getComputedStyle(el).fontFamily)).toContain('Courier Prime');
+});
+
+test('at the smallest scale (1280×700) every control is ≥ 44 px and every text ≥ 12 px on screen', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 700 });
+  await page.goto('./');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(page.getByTestId('gauge-runway-value')).toHaveText(/\d/);
+  const measure = () =>
+    page.evaluate(() => {
+      const scene = document.querySelector<HTMLElement>('[data-testid=scene]')!;
+      const scale = Number(/scale\(([\d.]+)\)/.exec(scene.style.transform)![1]);
+      const small: string[] = [];
+      for (const el of scene.querySelectorAll<HTMLElement>('*')) {
+        if (el.closest('.sr-only') || el.closest('svg') || el.getClientRects().length === 0) continue;
+        if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent!.trim())) continue;
+        const px = parseFloat(getComputedStyle(el).fontSize) * scale;
+        if (px < 12) small.push(`${px.toFixed(1)}px "${el.textContent!.trim().slice(0, 30)}"`);
+      }
+      const tiny = [...scene.querySelectorAll('button')]
+        .filter((b) => b.getClientRects().length > 0)
+        .map((b) => ({ name: b.getAttribute('aria-label') ?? b.textContent, r: b.getBoundingClientRect() }))
+        .filter(({ r }) => r.width < 44 || r.height < 44)
+        .map(({ name, r }) => `${name}: ${Math.round(r.width)}×${Math.round(r.height)}`);
+      return { scale, small, tiny };
+    });
+  const desk = await measure();
+  expect(desk.scale).toBeCloseTo(0.78, 2);
+  expect(desk.small).toEqual([]);
+  expect(desk.tiny).toEqual([]);
+
+  // the sheets laid over the desk follow the same floor
+  await page.getByTestId('decision-folder').first().click();
+  await expect(page.getByTestId('dossier-runway-value')).toHaveText(/\d/);
+  const dossier = await measure();
+  expect(dossier.small).toEqual([]);
+  expect(dossier.tiny).toEqual([]);
+  await page.keyboard.press('Escape');
+  await page.getByTestId('report-orders').click();
+  await expect(page.getByTestId('order-row').first()).toBeVisible();
+  const book = await measure();
+  expect(book.small).toEqual([]);
+  expect(book.tiny).toEqual([]);
+});
+
+test('when the engine worker cannot start, an error slip offers a new game that works', async ({ page }) => {
+  await page.goto('./');
+  await page.evaluate(() => localStorage.setItem('ceo-room.save.v1', JSON.stringify({ format: 1, seedVersion: 1, rngSeed: 42, workspaceId: 'ws_desk', log: [] })));
+  await page.route('**/engine.worker-*.js', (route) => route.abort());
+  await page.reload();
+  const slip = page.getByTestId('fatal-slip');
+  await expect(slip).toBeVisible();
+  await expect(slip).toContainText('Masa açılamadı');
+  await expect(page.getByTestId('loading')).toHaveCount(0);
+
+  await page.unroute('**/engine.worker-*.js');
+  await slip.getByTestId('fatal-new-game').click();
+  await expect(slip).toHaveCount(0);
+  await expect(page.getByTestId('calendar-day')).toHaveText('1');
+  // the save that was on file is kept as the backup
+  expect(await page.evaluate(() => localStorage.getItem('ceo-room.save.v1.bak'))).toContain('"seedVersion":1');
 });

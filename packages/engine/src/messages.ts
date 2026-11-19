@@ -24,6 +24,7 @@ export type MessageKind =
   | 'cashflow'
   | 'weekday'
   | 'health'
+  | 'label'
   | 'seed';
 
 export interface MessageCodeSpec {
@@ -94,6 +95,13 @@ export const CARD_PARAMS: Readonly<Record<CardEffect['kind'], readonly string[]>
 
 const FIELD = ['type', 'field'];
 const RANGE = ['type', 'field', 'min', 'max'];
+
+/**
+ * Fallback i18n keys an imported company's records use (company / product / material / line type /
+ * customer segment). The record's plain `name` (or `kindName`) is what the UI shows; these keys name
+ * the kind of record when no plain label exists.
+ */
+export const IMPORTED_LABEL_KEYS = ['company.imported', 'product.imported', 'material.imported', 'line.imported', 'segment.general'] as const;
 
 const STATIC: readonly MessageCodeSpec[] = [
   // ---- command and save-game errors (commands/handle.ts, core.ts, engine.ts) ----
@@ -183,6 +191,8 @@ const STATIC: readonly MessageCodeSpec[] = [
   ...['cashflow.supplierDeposit', 'cashflow.supplierPayment', 'cashflow.energy', 'cashflow.overtime', 'cashflow.customerReceipt'].map(
     (code) => ({ code, params: [], kind: 'cashflow' as const }),
   ),
+  // ---- generic labels of imported companies (records carry a plain `name` / `kindName` beside them) ----
+  ...IMPORTED_LABEL_KEYS.map((code) => ({ code, params: [], kind: 'label' as const })),
   // ---- calendar and health (selectors/desk.ts) ----
   ...WEEKDAY_CODES.map((code) => ({ code, params: [], kind: 'weekday' as const })),
   ...['good', 'fair', 'poor', 'critical'].map((b) => ({ code: `health.band.${b}`, params: [], kind: 'health' as const })),

@@ -21,7 +21,7 @@ export function overtimeNeeded(s: CompanyState, plantId: string, queue: Order[],
     const short = cum - regular;
     if (short <= 0) continue;
     let workdays = 0;
-    for (let d = day; d <= until; d++) if (isWorkday(d)) workdays++;
+    for (let d = day; d <= until; d++) if (isWorkday(d, s.company.day1Weekday)) workdays++;
     need = Math.max(need, Math.ceil(short / Math.max(1, workdays)));
   }
   return Math.min(need, plantOvertimeMinutes(s, plantId, day));

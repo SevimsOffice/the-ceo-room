@@ -1,5 +1,6 @@
 import type {
   Company,
+  CompanySource,
   Customer,
   Department,
   EventCard,
@@ -20,12 +21,21 @@ import type {
 } from '../model/types';
 import type { Money } from '../model/units';
 
+/**
+ * The company record as a seed carries it. `source` defaults to `'seed'` and `snapshotDate` to null
+ * (the committed NOVARA files predate them); `day1Weekday` is always derived from `snapshotDate`.
+ */
+export type SeedCompany = Omit<Company, 'source' | 'snapshotDate' | 'day1Weekday'> & {
+  source?: CompanySource;
+  snapshotDate?: string | null;
+};
+
 /** A seed sales order; `listUnitPrice` defaults to `unitPrice` when the opening state is built. */
 export type SeedOrder = Omit<Order, 'listUnitPrice'> & { listUnitPrice?: Money };
 
 /** One JSON file per key in data/seed/. */
 export interface SeedBundle {
-  company: { company: Company; settings: Settings };
+  company: { company: SeedCompany; settings: Settings };
   departments: Department[];
   plants: { plants: Plant[]; lines: ProductionLine[] };
   productFamilies: ProductFamily[];

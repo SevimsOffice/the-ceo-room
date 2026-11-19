@@ -1,11 +1,12 @@
-import type { CompanyState, WorkspaceId } from '../model/types';
+import type { Company, CompanyState, WorkspaceId } from '../model/types';
+import { isoWeekdayIndex } from '../model/calendarDate';
 import { money } from '../model/units';
 import { initRng } from '../rng/rng';
 import { Tx, cloneState, rule } from '../events/tx';
 import type { GameEvent } from '../events/types';
 import { recostOpenOrders } from '../systems/procurement';
 import { openDay } from '../systems/tick';
-import type { SeedBundle } from './types';
+import type { SeedBundle, SeedCompany } from './types';
 
 export interface EngineOptions {
   rngSeed: number;
@@ -17,6 +18,18 @@ const nextNumber = (ids: string[]): number =>
 
 function stamp<T extends { workspaceId: WorkspaceId }>(rows: T[], ws: WorkspaceId): T[] {
   return rows.map((r) => ({ ...r, workspaceId: ws }));
+}
+
+/** Company record with the defaults the seed may omit; Day 1's weekday from the snapshot date. */
+function companyFromSeed(c: SeedCompany, ws: WorkspaceId): Company {
+  const snapshotDate = c.snapshotDate ?? null;
+  return {
+    ...c,
+    workspaceId: ws,
+    source: c.source ?? 'seed',
+    snapshotDate,
+    day1Weekday: snapshotDate === null ? 0 : isoWeekdayIndex(snapshotDate),
+  };
 }
 
 /** Opening state built from the seed (Day 1, before the morning's events). */
@@ -40,7 +53,7 @@ export function stateFromSeed(seedIn: SeedBundle, opts: EngineOptions): CompanyS
       decision: 1,
     },
     settings: seed.company.settings,
-    company: { ...seed.company.company, workspaceId: ws },
+    company: companyFromSeed(seed.company.company, ws),
     departments: stamp(seed.departments, ws),
     workforce: stamp(seed.workforce, ws),
     plants: stamp(seed.plants.plants, ws),

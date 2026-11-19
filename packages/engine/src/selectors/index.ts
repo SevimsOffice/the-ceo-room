@@ -1,4 +1,5 @@
-import type { CompanyState, Decision, Development, Msg, Order, OrderPlan } from '../model/types';
+import type { CompanyState, CompanySource, Decision, Development, Msg, Order, OrderPlan } from '../model/types';
+import { simDayToDate } from '../model/calendarDate';
 import type { Bps, Money, Score, SimDay } from '../model/units';
 import { ratioBps } from '../model/units';
 import { type AdvisorBrief, type AdvisorRole, advisorBrief } from '../rules/advisors';
@@ -7,7 +8,7 @@ import { type DecisionImpacts, decisionImpacts } from '../projection/impact';
 import { type Runway, projectedRunway } from '../projection/project';
 import { weekdayIndex } from '../systems/calendar';
 import { OUTLOOK_HORIZONS } from '../config/tuning';
-import { type OverallHealth, type WeekdayCode, type WorkforceView, onTimeDeliveryBps, selectOverallHealth, selectWorkforce, weekdayCode } from './desk';
+import { type OverallHealth, type WeekdayCode, type WorkforceView, isForecastDay, onTimeDeliveryBps, selectOverallHealth, selectWorkforce, weekdayCode } from './desk';
 import { remainingMinutes } from '../systems/capacity';
 import { avgSatisfaction } from '../systems/kpi';
 import { companyTurnoverBps, overtimeHoursTrailing } from '../systems/people';
@@ -44,7 +45,20 @@ export interface MorningReport {
   weekday: number;
   weekdayCode: WeekdayCode;
   period: number;
-  company: { nameKey: string; city: string; currency: string; simulated: true };
+  company: {
+    nameKey: string;
+    /** plain name of an imported company (shown instead of nameKey) */
+    name: string | null;
+    city: string;
+    currency: string;
+    simulated: boolean;
+    source: CompanySource;
+    snapshotDate: string | null;
+  };
+  /** today's real date (ISO) for an imported company, null for the simulated seed */
+  date: string | null;
+  /** true when today's figures are a projection from the imported snapshot (imported, after Day 1) */
+  forecast: boolean;
   /** lastPeriod = last closed month; changeBps = vs the month before; periodToDate = this month so far */
   revenue: { lastPeriod: Money | null; previousPeriod: Money | null; changeBps: Bps | null; periodToDate: Money };
   cash: Money;
@@ -100,10 +114,20 @@ export function selectMorningReport(s: CompanyState, opts: MorningReportOptions 
   const bl = backlog(s);
   const base = {
     day: s.day,
-    weekday: weekdayIndex(s.day),
-    weekdayCode: weekdayCode(s.day),
+    weekday: weekdayIndex(s.day, s.company.day1Weekday),
+    weekdayCode: weekdayCode(s.day, s.company.day1Weekday),
     period: p,
-    company: { nameKey: s.company.nameKey, city: s.company.city, currency: s.company.currency, simulated: true as const },
+    company: {
+      nameKey: s.company.nameKey,
+      name: s.company.name ?? null,
+      city: s.company.city,
+      currency: s.company.currency,
+      simulated: s.company.simulated,
+      source: s.company.source,
+      snapshotDate: s.company.snapshotDate,
+    },
+    date: simDayToDate(s.company.snapshotDate, s.day),
+    forecast: isForecastDay(s.company, s.day),
     revenue: {
       lastPeriod: last,
       previousPeriod: prev,

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { RNG_SEED, STEEL_DECISION, WS, newEngine, seed } from '../test/seedFixture';
 import { checkInvariants } from '../test/invariants';
-import { type Engine, type SaveGame, STREAMS, fromSnapshot, initRng, selectMorningReport, stateHash, streamSeed } from './index';
+import { type CompanyState, type Engine, type SaveGame, STREAMS, fromSnapshot, initRng, selectMorningReport, stateHash, streamSeed } from './index';
 
 /** Fixed CEO script: decide steel on Day 1, analyse then grant the discount, reach Day 31. */
 function script(e: Engine): void {
@@ -26,7 +26,10 @@ function script(e: Engine): void {
  * change moves it, update it in the same commit and say why; an unexplained change is a bug.
  */
 // Review fixes 1 (Decision.basis) and 5 (Order.listUnitPrice) added state fields; outcomes unchanged.
-const GOLDEN_DAY31 = 'c1d8ee49';
+// M4a: Company gained source / snapshotDate / day1Weekday (data import); without them the state is
+// byte-identical to the M3 golden state (checked below), so outcomes are unchanged.
+const GOLDEN_DAY31 = 'e8c2c497';
+const GOLDEN_DAY31_M3 = 'c1d8ee49';
 
 describe('same seed + same commands → identical state', () => {
   const a = newEngine();
@@ -43,6 +46,12 @@ describe('same seed + same commands → identical state', () => {
 
   it('matches the golden Day-31 hash', () => {
     expect(stateHash(a.state())).toBe(GOLDEN_DAY31);
+  });
+
+  it('differs from the M3 golden state only by the M4a company metadata', () => {
+    const { source, snapshotDate, day1Weekday, ...company } = a.state().company;
+    expect({ source, snapshotDate, day1Weekday }).toEqual({ source: 'seed', snapshotDate: null, day1Weekday: 0 });
+    expect(stateHash({ ...a.state(), company } as unknown as CompanyState)).toBe(GOLDEN_DAY31_M3);
   });
 
   it('a save game replays to the live state (hash, state and ledger)', () => {

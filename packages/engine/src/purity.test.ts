@@ -63,7 +63,8 @@ describe('engine purity', () => {
     const bad: string[] = [];
     for (const f of files) {
       const src = readFileSync(f, 'utf8');
-      for (const m of src.matchAll(/(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\s*['"]([^'"]+)['"]/g)) {
+      // side-effect imports only at a statement start, so a string literal such as 'import' is not one
+      for (const m of src.matchAll(/(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|(?:^|;)\s*import\s*['"]([^'"]+)['"]/gm)) {
         const spec = m[1] ?? m[2] ?? '';
         if (!spec.startsWith('./') && !spec.startsWith('../')) {
           bad.push(`${relative(ENGINE, f)} → ${spec}`);

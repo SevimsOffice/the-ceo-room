@@ -11,7 +11,8 @@ import {
   HEALTH_WEIGHTS,
 } from '../config/tuning';
 import { type Runway, projectedRunway } from '../projection/project';
-import { weekdayIndex } from '../systems/calendar';
+import { isWorkday, weekdayIndex } from '../systems/calendar';
+import { simDayToDate } from '../model/calendarDate';
 import { avgSatisfaction } from '../systems/kpi';
 import { companyTurnoverBps, turnoverBps, turnoverRateBps } from '../systems/people';
 import { bookMarginBps, capacityUtilisationBps, currentPeriod } from './metrics';
@@ -21,9 +22,41 @@ import { bookMarginBps, capacityUtilisationBps, currentPeriod } from './metrics'
 export const WEEKDAY_CODES = ['weekday.mon', 'weekday.tue', 'weekday.wed', 'weekday.thu', 'weekday.fri', 'weekday.sat', 'weekday.sun'] as const;
 export type WeekdayCode = (typeof WEEKDAY_CODES)[number];
 
-/** i18n code of a day's weekday (Day 1 = Monday). */
-export function weekdayCode(day: SimDay): WeekdayCode {
-  return WEEKDAY_CODES[weekdayIndex(day)] ?? 'weekday.mon';
+/** i18n code of a day's weekday (`day1Weekday` = weekday of Day 1, 0 = Monday as in the seed). */
+export function weekdayCode(day: SimDay, day1Weekday = 0): WeekdayCode {
+  return WEEKDAY_CODES[weekdayIndex(day, day1Weekday)] ?? 'weekday.mon';
+}
+
+/**
+ * True when a day's figures are a forecast: the company was imported (Day 1 = its snapshot date, the
+ * only actual figures) and the day is after Day 1. The simulated seed is never a forecast.
+ */
+export function isForecastDay(company: Pick<CompanyState['company'], 'source'>, day: SimDay): boolean {
+  return company.source === 'import' && day > 1;
+}
+
+export interface CalendarDay {
+  day: SimDay;
+  /** real ISO date of the day (imported company), null for the simulated seed */
+  date: string | null;
+  /** 0 = Monday … 6 = Sunday */
+  weekday: number;
+  weekdayCode: WeekdayCode;
+  workday: boolean;
+  forecast: boolean;
+}
+
+/** Calendar view of a day (default: today) for the UI: real date, weekday and the forecast flag. */
+export function selectCalendarDay(s: CompanyState, day: SimDay = s.day): CalendarDay {
+  const w = s.company.day1Weekday;
+  return {
+    day,
+    date: simDayToDate(s.company.snapshotDate, day),
+    weekday: weekdayIndex(day, w),
+    weekdayCode: weekdayCode(day, w),
+    workday: isWorkday(day, w),
+    forecast: isForecastDay(s.company, day),
+  };
 }
 
 // ---- Runway --------------------------------------------------------------------------------

@@ -256,6 +256,12 @@ export const en: Readonly<Record<string, string>> = {
   'line.machining': 'machining line',
   'line.paint': 'paint line',
   'line.assembly': 'assembly line',
+  // generic labels of imported records (the record's own plain name is shown when it has one)
+  'company.imported': 'My company',
+  'product.imported': 'product',
+  'material.imported': 'material',
+  'line.imported': 'production line',
+  'segment.general': 'General',
 
   // ---- UI ------------------------------------------------------------------------------------
   'ui.brand': 'THE CEO ROOM',

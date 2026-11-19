@@ -1,4 +1,5 @@
 import { DEPARTMENT_IDS } from '../model/types';
+import { isIsoDate } from '../model/calendarDate';
 import type { SeedBundle } from './types';
 import { SEED_FILES } from './types';
 
@@ -6,7 +7,7 @@ import { SEED_FILES } from './types';
  * Hand-written shape guards for the seed (ADR-0006). Checks types, integer money/quantities,
  * workspaceId on every record, and referential integrity. Returns all problems found.
  */
-type Kind = 'str' | 'int' | 'bool' | 'arr' | 'obj' | 'intOrNull' | 'strOrNull' | 'objOrNull';
+type Kind = 'str' | 'text' | 'int' | 'bool' | 'arr' | 'obj' | 'intOrNull' | 'strOrNull' | 'objOrNull';
 
 type Rec = Record<string, unknown>;
 const isRec = (x: unknown): x is Rec => typeof x === 'object' && x !== null && !Array.isArray(x);
@@ -15,6 +16,8 @@ function check(v: unknown, k: Kind): boolean {
   switch (k) {
     case 'str':
       return typeof v === 'string' && v.length > 0;
+    case 'text':
+      return typeof v === 'string';
     case 'int':
       return typeof v === 'number' && Number.isSafeInteger(v);
     case 'bool':
@@ -67,6 +70,11 @@ class Checker {
 
 const idsOf = (rs: Rec[]): Set<string> => new Set(rs.map((r) => String(r.id)));
 
+/** Optional plain display label (imported companies): absent, or a non-empty string. */
+function optionalText(c: Checker, path: string, v: unknown): void {
+  if (v !== undefined && (typeof v !== 'string' || v.length === 0)) c.errors.push(`${path}: expected non-empty string when present`);
+}
+
 export type SeedValidation = { ok: true; bundle: SeedBundle } | { ok: false; errors: string[] };
 
 export function validateSeedBundle(raw: unknown): SeedValidation {
@@ -78,7 +86,15 @@ export function validateSeedBundle(raw: unknown): SeedValidation {
   const company = raw.company as Rec;
   if (c.fields('company', company, { company: 'obj', settings: 'obj' }, false)) {
     c.fields('company.company', company.company, { id: 'str', nameKey: 'str', city: 'str', currency: 'str', simulated: 'bool', seedVersion: 'int' });
-    if (isRec(company.company) && company.company.simulated !== true) c.errors.push('company.company.simulated: must be true');
+    if (isRec(company.company)) {
+      const co = company.company;
+      if (co.source !== undefined && co.source !== 'seed' && co.source !== 'import') c.errors.push('company.company.source: expected seed | import');
+      const snap = co.snapshotDate;
+      if (snap !== undefined && snap !== null && (typeof snap !== 'string' || !isIsoDate(snap))) c.errors.push('company.company.snapshotDate: expected YYYY-MM-DD or null');
+      if (co.source === 'import' && (typeof snap !== 'string' || co.simulated !== false)) c.errors.push('company.company: an imported company needs a snapshotDate and simulated false');
+      if (co.source !== 'import' && co.simulated !== true) c.errors.push('company.company.simulated: must be true for a seed company');
+      optionalText(c, 'company.company.name', co.name);
+    }
     c.fields(
       'company.settings',
       company.settings,
@@ -98,7 +114,7 @@ export function validateSeedBundle(raw: unknown): SeedValidation {
   }
 
   const depts = c.list('departments', raw.departments, {
-    id: 'str', nameKey: 'str', headName: 'str', headTitleKey: 'str', kpis: 'arr', constraints: 'arr', activeTasks: 'arr', risks: 'arr', dependsOn: 'arr',
+    id: 'str', nameKey: 'str', headName: 'text', headTitleKey: 'str', kpis: 'arr', constraints: 'arr', activeTasks: 'arr', risks: 'arr', dependsOn: 'arr',
   });
   for (const d of depts) if (!DEPARTMENT_IDS.includes(d.id as never)) c.errors.push(`departments: unknown id ${String(d.id)}`);
   const deptIds = idsOf(depts);
@@ -114,7 +130,10 @@ export function validateSeedBundle(raw: unknown): SeedValidation {
     plantIds = idsOf(plants);
     const lines = c.list('plants.lines', plantsFile.lines, {
       id: 'str', plantId: 'str', kindKey: 'str', shiftsPerDay: 'int', hoursPerShift: 'int', status: 'str', repairDueDay: 'intOrNull',
-    }, (r, p) => c.ref(`${p}.plantId`, r.plantId, plantIds));
+    }, (r, p) => {
+      c.ref(`${p}.plantId`, r.plantId, plantIds);
+      optionalText(c, `${p}.kindName`, r.kindName);
+    });
     lineIds = idsOf(lines);
   }
 
@@ -122,9 +141,13 @@ export function validateSeedBundle(raw: unknown): SeedValidation {
     id: 'str', nameKey: 'str', unit: 'str', stockQty: 'int', stockValue: 'int', safetyStock: 'int', lotSize: 'int', preferredSupplierId: 'str',
   });
   const materialIds = idsOf(materials);
-  for (const m of materials) if ((m.lotSize as number) <= 0) c.errors.push(`materials.${String(m.id)}.lotSize: must be > 0`);
+  for (const m of materials) {
+    if ((m.lotSize as number) <= 0) c.errors.push(`materials.${String(m.id)}.lotSize: must be > 0`);
+    optionalText(c, `materials.${String(m.id)}.name`, m.name);
+  }
 
   const families = c.list('productFamilies', raw.productFamilies, { id: 'str', nameKey: 'str', unitPrice: 'int', minutesPerUnit: 'int', bom: 'arr' }, (r, p) => {
+    optionalText(c, `${p}.name`, r.name);
     (r.bom as unknown[]).forEach((b, i) => {
       if (c.fields(`${p}.bom[${i}]`, b, { materialId: 'str', qtyPerUnit: 'int' }, false)) c.ref(`${p}.bom[${i}].materialId`, b.materialId, materialIds);
     });

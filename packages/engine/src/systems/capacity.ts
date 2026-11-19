@@ -20,14 +20,14 @@ export function plantLines(s: CompanyState, plantId: string): ProductionLine[] {
 }
 
 export function plantRegularMinutes(s: CompanyState, plantId: string, day: SimDay): number {
-  if (!isWorkday(day)) return 0;
+  if (!isWorkday(day, s.company.day1Weekday)) return 0;
   let t = 0;
   for (const l of plantLines(s, plantId)) t += lineMinutesOn(l, day);
   return t;
 }
 
 export function plantOvertimeMinutes(s: CompanyState, plantId: string, day: SimDay): number {
-  if (!isWorkday(day)) return 0;
+  if (!isWorkday(day, s.company.day1Weekday)) return 0;
   const up = plantLines(s, plantId).filter((l) => lineUpOn(l, day)).length;
   return up * s.settings.maxOvertimeHoursPerLineDay * 60;
 }

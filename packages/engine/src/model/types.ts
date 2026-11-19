@@ -34,13 +34,25 @@ export interface Settings {
   turnoverBpsPerOvertimeHourPerHead: Bps;
 }
 
+/** Where a company's opening position came from: the simulated seed or a template import. */
+export type CompanySource = 'seed' | 'import';
+
 export interface Company {
   workspaceId: WorkspaceId;
   id: string;
+  /** i18n key of the name (NOVARA); imported companies use `company.imported` plus `name` */
   nameKey: string;
+  /** plain display name (imported companies); shown instead of `nameKey` when present */
+  name?: string;
   city: string;
   currency: string;
-  simulated: true;
+  /** true for the sample company (all figures simulated); false for an imported company */
+  simulated: boolean;
+  source: CompanySource;
+  /** ISO date (YYYY-MM-DD) of Day 1 for an imported company; null for the simulated seed */
+  snapshotDate: string | null;
+  /** weekday of Day 1, 0 = Monday … 6 = Sunday; derived from `snapshotDate` (0 for the seed) */
+  day1Weekday: number;
   seedVersion: number;
 }
 
@@ -48,6 +60,7 @@ export interface Department {
   workspaceId: WorkspaceId;
   id: DepartmentId;
   nameKey: string;
+  /** fictional head of the sample company; empty for imported companies (no personal data) */
   headName: string;
   headTitleKey: string;
   kpis: string[];
@@ -78,7 +91,10 @@ export interface ProductionLine {
   workspaceId: WorkspaceId;
   id: string;
   plantId: string;
+  /** i18n key of the line type (`line.press`); `line.imported` plus `kindName` for a plain label */
   kindKey: string;
+  /** plain line-type label (imported companies); shown instead of `kindKey` when present */
+  kindName?: string;
   shiftsPerDay: number;
   hoursPerShift: number;
   status: 'running' | 'down';
@@ -94,7 +110,10 @@ export interface BomLine {
 export interface ProductFamily {
   workspaceId: WorkspaceId;
   id: string;
+  /** i18n key (`product.frames`); `product.imported` plus `name` for a plain label */
   nameKey: string;
+  /** plain display name (imported companies); shown instead of `nameKey` when present */
+  name?: string;
   unitPrice: Money;
   minutesPerUnit: number;
   bom: BomLine[];
@@ -103,7 +122,10 @@ export interface ProductFamily {
 export interface Material {
   workspaceId: WorkspaceId;
   id: string;
+  /** i18n key (`material.steel`); `material.imported` plus `name` for a plain label */
   nameKey: string;
+  /** plain display name (imported companies); shown instead of `nameKey` when present */
+  name?: string;
   unit: 'kg' | 'pcs' | 'set';
   stockQty: number;
   stockValue: Money;

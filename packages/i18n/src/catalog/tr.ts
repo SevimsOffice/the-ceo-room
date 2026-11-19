@@ -256,6 +256,12 @@ export const tr: Readonly<Record<string, string>> = {
   'line.machining': 'talaşlı imalat hattı',
   'line.paint': 'boya hattı',
   'line.assembly': 'montaj hattı',
+  // içe aktarılan kayıtların genel etiketleri (kaydın kendi adı varsa o gösterilir)
+  'company.imported': 'Şirketim',
+  'product.imported': 'ürün',
+  'material.imported': 'malzeme',
+  'line.imported': 'üretim hattı',
+  'segment.general': 'Genel',
 
   // ---- arayüz --------------------------------------------------------------------------------
   'ui.brand': 'THE CEO ROOM',

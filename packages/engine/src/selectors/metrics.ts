@@ -77,7 +77,7 @@ export function materialCoverageDays(s: CompanyState, materialId: string): numbe
   if (!m) return 0;
   const horizon = s.day + COVERAGE_NEED_WINDOW_DAYS;
   let workdays = 0;
-  for (let d = s.day; d < horizon; d++) if (isWorkday(d)) workdays++;
+  for (let d = s.day; d < horizon; d++) if (isWorkday(d, s.company.day1Weekday)) workdays++;
   const need = allocatedQty(s, materialId, undefined, horizon);
   if (need === 0 || workdays === 0) return COVERAGE_CAP_DAYS;
   const daily = need / workdays;

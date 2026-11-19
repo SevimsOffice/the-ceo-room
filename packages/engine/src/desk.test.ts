@@ -137,7 +137,7 @@ describe('selectMorningReport for the Desk', () => {
   });
 
   it('weekday codes cycle Monday → Sunday', () => {
-    expect([1, 2, 3, 4, 5, 6, 7, 8].map(weekdayCode)).toEqual([...WEEKDAY_CODES, 'weekday.mon']);
+    expect([1, 2, 3, 4, 5, 6, 7, 8].map((d) => weekdayCode(d))).toEqual([...WEEKDAY_CODES, 'weekday.mon']);
     const e = engineAt();
     e.advance(5);
     expect(selectMorningReport(e.state(), { includeRunway: false }).weekdayCode).toBe('weekday.sat');

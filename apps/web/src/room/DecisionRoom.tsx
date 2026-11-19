@@ -329,11 +329,6 @@ export function DecisionRoom() {
           <h2 id="options-heading" className="m-0 font-display text-[26px] font-medium italic leading-tight text-cream-2">
             {t.plural('ui.room.options.heading', onTable.length)}
           </h2>
-          {v.analysis && (
-            <span className="font-type text-label text-brass-text" data-testid="analysis-state">
-              {v.analysis.ready ? t.t('ui.room.analysis.ready') : t.t('ui.room.analysis.pending', { day: v.analysis.readyDay })}
-            </span>
-          )}
         </div>
         <div className="mt-2">
           <BaselineCard v={v} />

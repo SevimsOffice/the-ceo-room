@@ -416,7 +416,7 @@ export const tr: Readonly<Record<string, string>> = {
 
   'ui.room.situation': 'Durum özeti',
   'ui.room.telegramDay': '{day:day} geldi',
-  'ui.room.deadline': 'aksi halde {day:day} sabahı varsayılan uygulanır',
+  'ui.room.deadline': 'son gün {day:day} sabahı',
   'ui.room.options.heading.one': 'Tek seçenek',
   'ui.room.options.heading.other': '{count:int} seçenek',
   'ui.room.baseline.title': 'Taban: reddederseniz “{label:text}” uygulanır',
@@ -424,6 +424,8 @@ export const tr: Readonly<Record<string, string>> = {
   'ui.room.table.metric': 'Rakam',
   'ui.room.table.horizon': 'Vade',
   'ui.room.horizon': '+{days:int} gün',
+  'ui.room.horizonShort': '+{days:int}',
+  'ui.room.table.daysAhead': 'gün sonra',
   'ui.room.horizonDay': '{day:day}',
   'ui.room.metric.cash': 'Nakit',
   'ui.room.metric.margin': 'Brüt marj',

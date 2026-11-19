@@ -60,7 +60,8 @@ describe('memo lines', () => {
 
   it('a memo needs one to four valid lines; only a supplier price rise can be passed on', () => {
     expect(memoCommands([], catalog).commands).toBeNull();
-    const line = newLine('repriceOrders', catalog);
+    const line = { kind: 'repriceOrders' as const, materialId: 'steel', percent: '' };
+    expect(newLine('repriceOrders', catalog)).toEqual(line);
     expect(memoCommands([{ ...line, percent: '10' }], catalog).commands).toHaveLength(1);
     expect(memoCommands([{ ...line, percent: '10' }, { ...line, percent: 'x' }], catalog)).toMatchObject({ commands: null, errors: [null, { key: 'ui.room.memo.error.passThrough' }] });
     expect(availableKinds(catalog)).toEqual(['placePurchaseOrder', 'switchSupplier', 'repriceOrders', 'grantDiscount']);

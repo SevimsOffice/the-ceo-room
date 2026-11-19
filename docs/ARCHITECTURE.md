@@ -127,3 +127,20 @@ Integration tests assert steps 2–8 and that each option leads to a different s
   / raises `fatal`: the Desk shows an error slip whose New game restarts the worker with no save.
 - **Dossier on the Desk** reads `selectDecisionSummary` (no projection, no impacts), re-read after
   state changes but not during an advance; the runway row is the live projected runway.
+- **Decision Room in the worker (M3)**: requests `openRoom {decisionId}`, `closeRoom` and
+  `previewCustom {requestId, decisionId, commands}`; decisions themselves go through `dispatch`
+  (`approveOption`, `rejectDecision`, `requestAnalysis`, `customDecision`). While a room is open the
+  worker posts `room {decisionId, version, view}` after every state change, in the background after
+  the runway and **never during an advance** (one view when it ends). The view (`RoomView`) is built
+  from `selectDecision` (+7 / +30 impacts, `analysis.extended` +7 / +30 / +90 once ready),
+  `selectAdvisorBrief` (CFO, COO), `selectProjectedRunway` and a `MemoCatalog` (the allow-listed
+  instructions' choices and `COMMAND_LIMITS`), memoised per report version and decision.
+  `customPreview {requestId, version, status: ready | closed | busy, preview}` carries
+  `previewCustomDecision` (the engine's CommandError in `preview.impact.error`). The store shows a
+  room view or memo preview only when its `version` equals the report version on the desk, so
+  figures for another day are never shown ("calculating…" until the current one arrives).
+- **Ledger slip (M3)**: after every state change the worker reads the new part of the ledger for
+  `DecisionResolved` and, when a newer decision closed (approved, rejected, expired, or restored
+  from a save), posts `ledgerSlip`: that line and every line it caused (by command id or event
+  chain, `RngAdvanced` left out), each with its cause. The Desk keeps it as a carbon copy that opens
+  by itself after a decision taken in the room.

@@ -49,10 +49,18 @@ export function ActionBar({ v, stamp, setStamp }: { v: RoomView; stamp: Stamp; s
   }, [selected]);
 
   const acting = stamp !== null || pending !== null;
+  /** Send after the press; if nothing was sent (the room could no longer decide), lift the ink. */
   const later = (fn: () => void) => {
+    const send = () => {
+      fn();
+      if (!useGame.getState().room?.pending) {
+        setStamp(null);
+        setPressing(false);
+      }
+    };
     const ms = reducedMotion() ? 0 : PRESS_MS;
-    if (ms === 0) return fn();
-    timer.current = setTimeout(fn, ms);
+    if (ms === 0) return send();
+    timer.current = setTimeout(send, ms);
   };
 
   const onSeal = () => {

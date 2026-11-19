@@ -45,7 +45,8 @@ Pure building blocks (same code paths): `applyCommand(state, cmd)`, `advanceStat
   decision options.
 
 Invalid commands (unknown type, missing or extra field, non-integer or out-of-range number) return
-a typed error and change nothing. Committed state, ledger events and memoised read models are
+a typed error and change nothing. `COMMAND_LIMITS` (exported) gives the bounds on CEO-supplied
+numbers (purchase quantity, discount); pass-through is 0–10000 bps. Committed state, ledger events and memoised read models are
 deep-frozen.
 
 ### Selectors
@@ -68,6 +69,11 @@ deep-frozen.
 - `selectDecisionOutlook(state, id)`: the same impacts at +7 / +30 / +90 (advisors' view; open
   decisions only). `HorizonImpact.payablesDue` = supplier bills due in [previous checkpoint, this
   one), baseline vs option, with the first day the option's extra bills start.
+- `previewCustomDecision(state, id, commands, horizons = [7, 30])`: a custom decision memo's
+  impact, `{ decisionId, horizons, baseline, impact: OptionImpact }` (optionId `'custom'`), from
+  `project([customDecision], H)` against the same memoised baseline run as the options. The memo is
+  checked as on dispatch; a refusal is `impact.error`. Null for an unknown or closed decision.
+  Equals sealing the memo and advancing (test).
 - `selectAdvisorBrief(state, 'cfo' | 'coo', id)`: recommended option, ranking, `thirtyDayPick`,
   `pickChanged`, `deferred[{ optionId, amount, firstDueDay }]`, `caveats` (Msg), rationale code,
   citations `{ selector, value }`, assumptions. Ranking rules (worse of +30 / +90) in ADR-0007.

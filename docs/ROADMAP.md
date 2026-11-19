@@ -8,7 +8,7 @@ updated, a done-vs-outstanding report, and a stop for approval.
 | 0 | **Phase 0: docs** *(done)* | CLAUDE.md, ARCHITECTURE, DOMAIN_MODEL, SIMULATION_DESIGN, ROADMAP, ADRs, sub-agents. Open questions answered. |
 | 1 | **Domain model + engine + seed + vertical slice** *(done)* | pnpm monorepo; `packages/engine` with model, RNG, daily tick, order pipeline, supplier-price card, decision with 3 options, CFO/COO rules, `project()`; `data/seed` from `scripts/generate-seed.ts`; Vitest: determinism, invariants, spec steps 1–8, options produce different states, delayed cash effect. No UI. |
 | 2 | **The Desk UI** *(done)* | React/Vite/Tailwind app renders morning report, telegrams, pending folders, capacity + projected-runway gauges, overall health, employee turnover, calendar, advance-day bell + week/month/pause brass dial, all from selectors; TR default with remembered TR/EN switch; self-hosted fonts; desktop ≥1280px scaled scene, smaller screens show a "best viewed on desktop" note; localStorage save/load; looks like `design/`. Order figures show live values with the plan alongside where they differ. Engine runs in a Web Worker (no UI freeze). Deployed to GitHub Pages by GitHub Actions. |
-| 3 | **Decision Room** *(current)* | Opens from a telegram/folder; situation, supporting figures, options with today vs +30 deltas from `project()` incl. a people row (overtime/turnover); CFO/COO notes signed with fictional names ("Ayşe Kaya — CFO"); approve (seal), reject, request analysis, custom decision; state changes and ledger entries visible on the Desk. Playwright journey. |
+| 3 | **Decision Room** *(done, awaiting approval)* | Opens from a telegram/folder; situation, supporting figures, options with today vs +30 deltas from `project()` incl. a people row (overtime/turnover); CFO/COO notes signed with fictional names ("Ayşe Kaya — CFO"); approve (seal), reject, request analysis, custom decision; state changes and ledger entries visible on the Desk. Playwright journey. |
 | 4 | **More workflows & departments** | All 8 event cards live; breakdown, export, turnover, late payment, cash squeeze flows; department data complete. Negotiation outcomes with seeded uncertainty (success probability, range of settled prices). Breakdown re-plans promise dates. Probabilistic churn and lost-demand modelling. Forfeited deposits and other one-off losses in margin/P&L metrics. |
 | 4a | **Real data: Excel import (local)** | Per `docs/DATA_IMPORT_DESIGN.md`: downloadable xlsx template (one sheet per entity, TR/EN), in-browser validation (structure, field, cross-sheet, privacy guard) with error report, `TemplateDataSource` → `SeedBundle`, Day 1 = snapshot date and time = forecast, Archive Room (Arşiv Odası) with browse, data sources register and NOVARA / My company switch. Data stays in the browser. Same file → same state hash. |
 | 4b | **Real data: Supabase** | Auth, `workspace_id` + Row Level Security per workspace, roles, import audit log, EU hosting, export/delete workspace; saves and imports synced. |
@@ -37,6 +37,19 @@ updated, a done-vs-outstanding report, and a stop for approval.
   scroll). Small print is 15.5 px and controls 57 px in the 1440×900 scene, so on screen text is
   ≥ 12 px and controls ≥ 44 px (e2e checks both).
 - Telegrams with an open decision stay "new" until the Decision Room (M3) resolves them.
+
+## Notes from Milestone 3
+
+- The room opens from a decision telegram, from a folder's dossier, and from its tab (shown while a
+  decision is open in the room); the Desk tab is always there. Options other than the default are
+  pinned notes; the default (absorb / refuse) is the baseline card that every delta is measured
+  against, and is what Reject runs.
+- Custom decisions are previewed by `previewCustomDecision` (engine, same projection code and
+  baseline as the options) and sealed exactly as previewed; inputs are checked against
+  `COMMAND_LIMITS` before the engine checks them again.
+- After a decision the Desk shows a ledger carbon copy (the decision's ledger lines with causes).
+- The room is computed in the worker only when no advance runs, tagged with the report version.
+- Room money cells are printed in millions (unit in the row header) so +7 / +30 / +90 fit a note.
 
 ## Out of scope for now
 

@@ -55,7 +55,7 @@ export function LedgerCarbon() {
         type="button"
         onClick={openLedger}
         className="press on-paper absolute bottom-[26px] left-[61px] z-10 box-border flex min-h-touch w-[290px] cursor-pointer flex-col items-start justify-center border-0 px-4 py-1.5 text-left"
-        style={{ background: 'linear-gradient(180deg,#d9dde6,#c9ced9)', color: '#1c2333', transform: 'rotate(-1deg)', boxShadow: '0 8px 16px rgba(0,0,0,.5)' }}
+        style={{ background: 'linear-gradient(180deg,#e6dcc0,#d8ccab)', color: '#2c2547', transform: 'rotate(-1deg)', boxShadow: '0 8px 16px rgba(0,0,0,.5)' }}
         data-testid="ledger-slip"
       >
         <span className="font-type text-label font-bold uppercase tracking-[.12em]">{t.t('ui.ledger.carbon')}</span>

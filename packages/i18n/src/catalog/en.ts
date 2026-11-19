@@ -416,7 +416,7 @@ export const en: Readonly<Record<string, string>> = {
 
   'ui.room.situation': 'Situation summary',
   'ui.room.telegramDay': 'received {day:day}',
-  'ui.room.deadline': 'otherwise the default applies on the morning of {day:day}',
+  'ui.room.deadline': 'due by the morning of {day:day}',
   'ui.room.options.heading.one': 'One course of action',
   'ui.room.options.heading.other': '{count:int} courses of action',
   'ui.room.baseline.title': 'Baseline: if you reject, “{label:text}” applies',
@@ -424,6 +424,8 @@ export const en: Readonly<Record<string, string>> = {
   'ui.room.table.metric': 'Figure',
   'ui.room.table.horizon': 'Horizon',
   'ui.room.horizon': '+{days:int} days',
+  'ui.room.horizonShort': '+{days:int}',
+  'ui.room.table.daysAhead': 'days ahead',
   'ui.room.horizonDay': '{day:day}',
   'ui.room.metric.cash': 'Cash',
   'ui.room.metric.margin': 'Gross margin',

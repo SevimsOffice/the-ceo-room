@@ -4,19 +4,10 @@ import { byId } from '../events/reduce';
 import { type Tx, rule } from '../events/tx';
 import type { Cause } from '../events/types';
 import { openOrders } from './capacity';
+import { CUSTOMER_RULES } from '../config/tuning';
 
-/** Explicit customer-reaction rules (SIMULATION_DESIGN §3 step 8). */
-export const CUSTOMER_RULES = {
-  onTimeShipment: 100 as Score,
-  latePerDay: -80 as Score,
-  lateMax: -1000 as Score,
-  overduePerDay: -20 as Score,
-  /** churn risk moves 1 bps per 1/100 point of satisfaction lost (and back) */
-  churnPerSatisfaction: -1,
-  churnThresholdBps: 6000 as Bps,
-  /** goodwill from an unsolicited discount: satisfaction per 100 bps of discount increase (0.25 pt per 1%) */
-  discountGoodwillPer100Bps: 25 as Score,
-} as const;
+/** Customer-reaction rules live in config/tuning.ts; re-exported here for existing imports. */
+export { CUSTOMER_RULES };
 
 export interface DerivedReaction {
   satisfactionDelta: Score;

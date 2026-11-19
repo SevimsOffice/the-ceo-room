@@ -1,4 +1,4 @@
-import type { CompanyState, DepartmentId } from '../model/types';
+import type { CompanyState, DepartmentId, Settings, WorkforceRow } from '../model/types';
 import type { Bps } from '../model/units';
 import { type Tx, rule } from '../events/tx';
 import { chance } from '../rng/rng';
@@ -11,13 +11,22 @@ export function overtimeHoursTrailing(s: CompanyState, days?: number): number {
   return t;
 }
 
-/** Monthly turnover rate: base + overtime fatigue (operations carries the overtime). */
+/**
+ * Monthly turnover rate of a department given the overtime person-hours of a 30-day window:
+ * base + overtime fatigue (operations carries the overtime).
+ */
+export function turnoverRateBps(w: WorkforceRow, overtimeHours: number, settings: Settings): Bps {
+  if (w.departmentId !== 'operations' || w.headcount === 0) return w.baseTurnoverBps;
+  const perHead = overtimeHours / w.headcount;
+  return w.baseTurnoverBps + Math.round(perHead * settings.turnoverBpsPerOvertimeHourPerHead);
+}
+
+/** Monthly turnover rate now: base + overtime fatigue over the trailing period. */
 export function turnoverBps(s: CompanyState, dept: DepartmentId): Bps {
   const w = s.workforce.find((r) => r.departmentId === dept);
   if (!w) return 0;
   if (dept !== 'operations' || w.headcount === 0) return w.baseTurnoverBps;
-  const perHead = overtimeHoursTrailing(s) / w.headcount;
-  return w.baseTurnoverBps + Math.round(perHead * s.settings.turnoverBpsPerOvertimeHourPerHead);
+  return turnoverRateBps(w, overtimeHoursTrailing(s), s.settings);
 }
 
 /** Company-wide turnover, headcount-weighted. */

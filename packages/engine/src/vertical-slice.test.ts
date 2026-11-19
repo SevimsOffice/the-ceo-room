@@ -117,7 +117,11 @@ describe('vertical slice: morning report → big order → supplier problem → 
     const cfo = selectAdvisorBrief(day1, 'cfo', STEEL_DECISION);
     const coo = selectAdvisorBrief(day1, 'coo', STEEL_DECISION);
     if (!cfo || !coo) throw new Error('advisor brief missing');
-    expect(cfo.recommendedOptionId).toBe('switch'); // B
+    // ADR-0007 90-day outlook: B (switch) is best on the +30 view, but bills and slip after Day 30
+    // make absorbing safer for cash; the CFO recommends absorb and flags the change and switch's bills.
+    expect(cfo.recommendedOptionId).toBe('absorb');
+    expect(cfo.thirtyDayPick).toBe('switch'); // B
+    expect(cfo.caveats.map((c) => c.code)).toEqual(['advisor.caveat.deferredPayables', 'advisor.caveat.pickChangedAt90']);
     expect(coo.recommendedOptionId).toBe('negotiate'); // A
     for (const c of [...cfo.citations, ...coo.citations]) expect({ selector: c.selector, value: resolveCitation(day1, c.selector) }).toEqual(c);
 

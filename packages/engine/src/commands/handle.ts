@@ -209,6 +209,26 @@ function runOperational(tx: Tx, c: OperationalCommand, d: Decision | null, cause
   return null;
 }
 
+/**
+ * A custom decision on a discount demand that does not grant that customer a discount is a refusal:
+ * the card's refusal reaction applies first, exactly as on reject or expiry (ADR-0007). A
+ * `grantDiscount` to that customer answers the demand itself (0 bps = refusal via discountReaction).
+ */
+export function unansweredDemandReaction(d: Decision, commands: readonly CeoCommand[]): OperationalCommand[] {
+  if (d.basis.kind !== 'discountDemand') return [];
+  const b = d.basis;
+  if (commands.some((c) => c.type === 'grantDiscount' && c.customerId === b.customerId)) return [];
+  return [
+    {
+      type: 'customerReaction',
+      customerId: b.customerId,
+      satisfactionDelta: b.refusal.satisfactionDelta,
+      churnRiskDelta: b.refusal.churnRiskDelta,
+      reasonCode: 'reason.discountRefused',
+    },
+  ];
+}
+
 function openDecision(s: CompanyState, id: string): Decision | CommandError {
   const d = s.decisions.find((x) => x.id === id);
   if (!d) return err('error.unknownDecision', { decisionId: id });
@@ -313,7 +333,8 @@ export function handleCommand(tx: Tx, cmd: Command, cause: Cause): CommandError 
       }
       // The ledger keeps its own copy: later changes to the caller's objects cannot rewrite history.
       const commands = copy(cmd.commands);
-      return resolveDecision(tx, d, 'approved', null, commands, copy(commands), cause);
+      const run: OperationalCommand[] = [...unansweredDemandReaction(d, commands), ...commands];
+      return resolveDecision(tx, d, 'approved', null, run, copy(commands), cause);
     }
     default:
       return runOperational(tx, cmd, null, cause);

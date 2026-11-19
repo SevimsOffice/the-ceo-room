@@ -1,29 +1,13 @@
 import type { CompanyState, Msg } from '../model/types';
 import type { SimDay } from '../model/units';
-import { tl } from '../model/units';
+import { RISK_RULES } from '../config/tuning';
 import { blockedOrders, deliverySlip } from '../selectors/metrics';
 import { turnoverBps } from '../systems/people';
 
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
 
-/** Explicit, documented risk rules. Points add up; the level is a band of the total. */
-export const RISK_RULES = {
-  cashNegative: 3,
-  cashLowThreshold: tl(10_000_000),
-  cashLow: 1,
-  lateOrdersMany: { atLeast: 3, points: 2 },
-  lateOrdersSome: { atLeast: 1, points: 1 },
-  materialShortage: 2,
-  churnHigh: { atLeastBps: 3000, points: 2 },
-  churnElevated: { atLeastBps: 2000, points: 1 },
-  turnoverHigh: { atLeastBps: 400, points: 1 },
-  lineDown: 1,
-  bands: [
-    { maxScore: 1, level: 'low' },
-    { maxScore: 3, level: 'medium' },
-    { maxScore: 5, level: 'high' },
-  ] as { maxScore: number; level: RiskLevel }[],
-} as const;
+/** Risk rules live in config/tuning.ts; re-exported here for existing imports. */
+export { RISK_RULES };
 
 export interface RiskAssessment {
   score: number;

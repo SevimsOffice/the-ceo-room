@@ -3,6 +3,7 @@ import { type Bps, type Money, type SimDay, addM, money, mulDiv, ratioBps } from
 import { availableMinutes, minutesRequired, openOrders, remainingMinutes } from '../systems/capacity';
 import { allocatedQty, inboundQty } from '../systems/costing';
 import { isWorkday, periodOf } from '../systems/calendar';
+import { COVERAGE_CAP_DAYS, COVERAGE_INBOUND_DAYS, COVERAGE_NEED_WINDOW_DAYS } from '../config/tuning';
 
 /** Derived read models shared by selectors, risk rules and advisors. Never stored. */
 
@@ -70,17 +71,17 @@ export function avgLeadTimeDays(s: CompanyState): number {
   return Math.round(open.reduce((t, o) => t + (o.promisedDay - o.receivedDay), 0) / open.length);
 }
 
-/** Workdays of production need covered by stock + inbound due within 7 days. */
+/** Workdays of production need (next 30 days) covered by stock + inbound due within 7 days (config/tuning.ts). */
 export function materialCoverageDays(s: CompanyState, materialId: string): number {
   const m = s.materials.find((x) => x.id === materialId);
   if (!m) return 0;
-  const horizon = s.day + 30;
+  const horizon = s.day + COVERAGE_NEED_WINDOW_DAYS;
   let workdays = 0;
   for (let d = s.day; d < horizon; d++) if (isWorkday(d)) workdays++;
   const need = allocatedQty(s, materialId, undefined, horizon);
-  if (need === 0 || workdays === 0) return 99;
+  if (need === 0 || workdays === 0) return COVERAGE_CAP_DAYS;
   const daily = need / workdays;
-  return Math.min(99, Math.floor((m.stockQty + inboundQty(s, materialId, s.day + 7)) / daily));
+  return Math.min(COVERAGE_CAP_DAYS, Math.floor((m.stockQty + inboundQty(s, materialId, s.day + COVERAGE_INBOUND_DAYS)) / daily));
 }
 
 export function blockedOrders(s: CompanyState): number {

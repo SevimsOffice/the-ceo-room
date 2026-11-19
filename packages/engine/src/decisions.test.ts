@@ -355,3 +355,76 @@ describe('deadline expiry validates the default option (review fix 8)', () => {
     expect(s.purchaseOrders.some((p) => p.supplierId === 'sup_nobody' || p.qty === 1.5)).toBe(false);
   });
 });
+
+describe('custom decision on a discount demand without a grant = refusal (loophole fix)', () => {
+  const DISCOUNT = 'dec-0002';
+  const VELORA = 'cus_velora';
+  const PO: OperationalCommand = { type: 'placePurchaseOrder', supplierId: 'sup_kuzeycelik', materialId: 'steel', qty: 10_000 };
+  const atDay9 = (): Engine => {
+    const e = engineAt();
+    e.advance(8);
+    return e;
+  };
+  const cust = (e: Engine, id = VELORA) => {
+    const c = e.state().customers.find((x) => x.id === id);
+    if (!c) throw new Error(`no customer ${id}`);
+    return c;
+  };
+  const custom = (commands: OperationalCommand[]): Command => ({ type: 'customDecision', decisionId: DISCOUNT, commands } as Command);
+
+  it('triggers the same refusal reaction as reject (customers identical to reject + the same command)', () => {
+    const rejected = atDay9();
+    expect(rejected.dispatch({ type: 'rejectDecision', decisionId: DISCOUNT }).ok).toBe(true);
+    expect(rejected.dispatch(PO as Command).ok).toBe(true);
+    const viaCustom = atDay9();
+    const r = viaCustom.dispatch(custom([PO]));
+    expect(r.ok).toBe(true);
+    expect(JSON.stringify(viaCustom.state().customers)).toBe(JSON.stringify(rejected.state().customers));
+    // the reaction is ledgered as a refusal, caused by the decision's resolution
+    const events = r.ok ? r.events : [];
+    const resolved = events.find((x) => x.type === 'DecisionResolved');
+    const refusal = events.find((x) => x.type === 'CustomerSatisfactionChanged' && x.payload.customerId === VELORA);
+    expect(refusal?.type === 'CustomerSatisfactionChanged' ? refusal.payload.reasonCode : null).toBe('reason.discountRefused');
+    expect(refusal?.cause).toEqual({ kind: 'event', seq: resolved?.seq });
+    // and it is no longer free: the custom path differs from approving the grant
+    const granted = atDay9();
+    granted.dispatch({ type: 'approveOption', decisionId: DISCOUNT, optionId: 'grant' });
+    expect(cust(viaCustom).satisfaction).toBeLessThan(cust(granted).satisfaction);
+  });
+
+  it('matches reject exactly on satisfaction and churn deltas, also when the custom grant goes to another customer', () => {
+    const base = atDay9();
+    const card = base.state().eventCards.find((c) => c.id === 'card_discount_demand');
+    if (card?.effect.kind !== 'discountDemand') throw new Error('discount card missing');
+    const fx = card.effect;
+    const other = base.state().customers.find((c) => c.id !== VELORA && c.status === 'active');
+    if (!other) throw new Error('no other customer');
+    const e = atDay9();
+    expect(e.dispatch(custom([{ type: 'grantDiscount', customerId: other.id, discountBps: 300 }])).ok).toBe(true);
+    expect(cust(e).satisfaction - cust(base).satisfaction).toBe(fx.refusal.satisfactionDelta);
+    expect(cust(e).churnRisk - cust(base).churnRisk).toBe(fx.refusal.churnRiskDelta);
+    expect(cust(e).discountBps).toBe(cust(base).discountBps);
+  });
+
+  it('a custom grant to the demanding customer answers the demand itself (no extra refusal)', () => {
+    const base = atDay9();
+    const zero = atDay9();
+    expect(zero.dispatch(custom([{ type: 'grantDiscount', customerId: VELORA, discountBps: 0 }])).ok).toBe(true);
+    const rejected = atDay9();
+    rejected.dispatch({ type: 'rejectDecision', decisionId: DISCOUNT });
+    // granting 0 is a refusal once (discountReaction), not twice
+    expect(cust(zero).satisfaction).toBe(cust(rejected).satisfaction);
+    const full = atDay9();
+    expect(full.dispatch(custom([{ type: 'grantDiscount', customerId: VELORA, discountBps: 800 }])).ok).toBe(true);
+    const granted = atDay9();
+    granted.dispatch({ type: 'approveOption', decisionId: DISCOUNT, optionId: 'grant' });
+    expect(cust(full).satisfaction).toBe(cust(granted).satisfaction);
+    expect(cust(full).satisfaction).toBeGreaterThan(cust(base).satisfaction);
+  });
+
+  it('a custom decision on the steel decision gets no customer reaction (only discount demands have one)', () => {
+    const e = engineAt();
+    const r = e.dispatch(CUSTOM);
+    expect(r.ok && r.events.some((x) => x.type === 'CustomerSatisfactionChanged')).toBe(false);
+  });
+});

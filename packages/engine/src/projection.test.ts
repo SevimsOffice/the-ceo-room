@@ -195,7 +195,7 @@ describe('callers cannot change live state or memoised read models (review fix 7
     expect(selectDecision(s, STEEL_DECISION)?.impacts).toBe(view.impacts);
     expect(selectDecision(s, STEEL_DECISION)?.decision.status).toBe('open');
     expect(projectedRunway(s).days).toBe(runway.days);
-    expect(selectAdvisorBrief(s, 'cfo', STEEL_DECISION)?.recommendedOptionId).toBe('switch');
+    expect(selectAdvisorBrief(s, 'cfo', STEEL_DECISION)?.recommendedOptionId).toBe('absorb'); // 90-day outlook (ADR-0007)
   });
 
   it('a zero-day projection returns a copy, never the live state', () => {

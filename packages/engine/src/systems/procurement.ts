@@ -6,11 +6,11 @@ import type { Cause, EventOf } from '../events/types';
 import { chanceBps, intBelow } from '../rng/rng';
 import { allocatedQty, inboundQty, offerOf, orderCostEstimate } from './costing';
 import { openOrders } from './capacity';
+import { IN_TRANSIT_DAYS, SUPPLIER_SLIP_MIN_DAYS, SUPPLIER_SLIP_SPREAD_DAYS } from '../config/tuning';
 
 export const pad = (n: number): string => String(n).padStart(4, '0');
 
-/** Days within which an undelivered PO counts as in transit and can no longer be cancelled. */
-export const IN_TRANSIT_DAYS = 2;
+export { IN_TRANSIT_DAYS };
 
 export function plannedDueDay(tx: Tx, supplierId: string, materialId: string): number {
   const s = tx.s;
@@ -39,9 +39,9 @@ export function placePurchaseOrder(
       firstDeliveryDay: due,
     });
   }
-  // Reliability: a failed draw hides a 2–6 day slip, revealed on the due day.
+  // Reliability: a failed draw hides a 2–6 day slip (config/tuning.ts), revealed on the due day.
   const late = chanceBps(tx.draw('suppliers'), 10000 - sup.reliabilityBps);
-  const delayDays = late ? 2 + intBelow(tx.draw('suppliers'), 5) : 0;
+  const delayDays = late ? SUPPLIER_SLIP_MIN_DAYS + intBelow(tx.draw('suppliers'), SUPPLIER_SLIP_SPREAD_DAYS) : 0;
   const amount = timesQty(offer.unitPrice, input.qty);
   const deposit = mulBps(amount, sup.depositBps);
   const po: PurchaseOrder = {

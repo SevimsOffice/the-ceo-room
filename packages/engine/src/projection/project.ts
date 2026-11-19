@@ -93,7 +93,7 @@ export type ProjectionResult = Projection | { ok: false; error: CommandError };
  * Run the real engine forward on a copy of `state`: apply `cmds`, then advance `days`, taking KPI
  * snapshots at each checkpoint (days after start). The input state is never touched.
  */
-export function projectState(state: CompanyState, cmds: readonly Command[], days: number, checkpoints: number[] = [days]): ProjectionResult {
+export function projectState(state: CompanyState, cmds: readonly Command[], days: number, checkpoints: readonly number[] = [days]): ProjectionResult {
   let s = state;
   let eventCount = 0;
   for (const c of cmds) {

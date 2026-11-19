@@ -211,6 +211,20 @@ describe('CEO commands carry intent only; the engine derives every outcome (revi
     expect(e.state().decisions.find((d) => d.id === STEEL_DECISION)?.status).toBe('open');
   });
 
+  it('the pass-through bound comes from COMMAND_LIMITS.maxPassThroughBps (above it rejected, at it accepted)', () => {
+    expect(COMMAND_LIMITS.maxPassThroughBps).toBe(10_000);
+    const e = engineAt();
+    const over = { type: 'repriceOrders', materialId: 'steel', passThroughBps: COMMAND_LIMITS.maxPassThroughBps + 1 } as const;
+    expectRejected(e, { type: 'customDecision', decisionId: STEEL_DECISION, commands: [over] }, 'error.invalidRate');
+    expectRejected(e, over as Command, 'error.invalidRate');
+    const atMax = e.dispatch({
+      type: 'customDecision',
+      decisionId: STEEL_DECISION,
+      commands: [{ type: 'repriceOrders', materialId: 'steel', passThroughBps: COMMAND_LIMITS.maxPassThroughBps }],
+    });
+    expect(atMax.ok).toBe(true);
+  });
+
   it("probe: a custom decision cannot set a customer's satisfaction or churn risk", () => {
     const e = engineAt();
     const before = cust(e.state(), 'cus_demirhan');

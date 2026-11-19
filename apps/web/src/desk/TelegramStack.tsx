@@ -37,6 +37,7 @@ function Telegram({ tg, index, expanded, onToggle, isNew }: { tg: TelegramView; 
         boxShadow: '0 10px 18px rgba(0,0,0,.5)',
       }}
       data-testid="telegram"
+      data-decision={tg.decisionId ?? undefined}
       data-code={tg.message.code}
       data-status={tg.status}
     >

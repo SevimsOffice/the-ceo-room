@@ -12,18 +12,34 @@ function RoomTabs() {
   const room = useGame((s) => s.room);
   const showDesk = useGame((s) => s.showDesk);
   const showRoom = useGame((s) => s.showRoom);
+  // while a decision is being sent the room stays in front (the tabs keep focus, but do nothing)
+  const locked = room?.pending != null;
   if (!room) return null;
   const n = decisionNumber(room.decisionId);
   const tab = (active: boolean) =>
-    `press flex h-touch items-center rounded-md px-5 font-display text-base font-bold tracking-[.03em] ${
+    `press flex h-touch items-center rounded-md px-5 font-display text-base font-bold tracking-[.03em] aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ${
       active ? 'bg-[#e6d9b8] text-[#2a1c10] shadow-[0_3px_8px_rgba(0,0,0,.5)]' : 'border border-brass-edge bg-[#2a1710] text-brass-text hover:bg-[#3a2016]'
     }`;
   return (
     <nav aria-label={t.t('ui.tabs.label')} className="flex gap-2">
-      <button type="button" className={tab(view === 'desk')} aria-current={view === 'desk' ? 'page' : undefined} onClick={showDesk} data-testid="tab-desk">
+      <button
+        type="button"
+        className={tab(view === 'desk')}
+        aria-current={view === 'desk' ? 'page' : undefined}
+        aria-disabled={locked || undefined}
+        onClick={() => !locked && showDesk()}
+        data-testid="tab-desk"
+      >
         {t.t('ui.room.desk')}
       </button>
-      <button type="button" className={tab(view === 'room')} aria-current={view === 'room' ? 'page' : undefined} onClick={showRoom} data-testid="tab-room">
+      <button
+        type="button"
+        className={tab(view === 'room')}
+        aria-current={view === 'room' ? 'page' : undefined}
+        aria-disabled={locked || undefined}
+        onClick={() => !locked && showRoom()}
+        data-testid="tab-room"
+      >
         {t.t('ui.tabs.room', { n })}
       </button>
     </nav>

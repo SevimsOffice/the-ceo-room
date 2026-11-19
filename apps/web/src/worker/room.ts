@@ -12,14 +12,14 @@ import {
   selectDecision,
   selectProjectedRunway,
 } from '@ceo-room/engine';
-import type { LedgerCause, LedgerLine, LedgerSlip, MemoCatalog, RoomView } from './protocol';
+import type { LedgerCause, LedgerLine, LedgerParty, LedgerSlip, MemoCatalog, RoomView } from './protocol';
 
 const decisionNumber = (id: string): number => Number(/(\d+)$/.exec(id)?.[1] ?? 0);
 
 /** What a custom memo may hold on this decision (choices and limits; the engine checks again). */
 export function memoCatalog(s: Readonly<CompanyState>, d: Readonly<Decision>): MemoCatalog {
   return {
-    limits: { maxPurchaseQty: COMMAND_LIMITS.maxPurchaseQty, maxDiscountBps: COMMAND_LIMITS.maxDiscountBps, maxPassThroughBps: 10000 },
+    limits: { maxPurchaseQty: COMMAND_LIMITS.maxPurchaseQty, maxDiscountBps: COMMAND_LIMITS.maxDiscountBps, maxPassThroughBps: COMMAND_LIMITS.maxPassThroughBps },
     offers: s.suppliers.flatMap((sup) => sup.offers.map((o) => ({ supplierId: sup.id, materialId: o.materialId }))),
     materials: s.materials.map((m) => ({ id: m.id, preferredSupplierId: m.preferredSupplierId })),
     customers: s.customers.map((c) => ({ id: c.id, discountBps: c.discountBps })),
@@ -140,6 +140,19 @@ export function ledgerSlip(s: Readonly<CompanyState>, ledger: readonly GameEvent
   const d = s.decisions.find((x) => x.id === p.decisionId);
   const label = p.optionId !== null ? (d?.options.find((o) => o.id === p.optionId)?.labelKey ?? null) : null;
   const shown: LedgerLine[] = lines.slice(0, SLIP_LINES).map((ev) => ({ seq: ev.seq, day: ev.day, code: ev.code, params: ev.params, cause: cause(ev) }));
+  // name orders by their customer and purchase orders by their supplier (the slip prints no raw ids)
+  const parties: Record<string, LedgerParty> = {};
+  for (const l of shown) {
+    const p = l.params;
+    if (typeof p.orderId === 'string' && !parties[p.orderId]) {
+      const id = typeof p.customerId === 'string' ? p.customerId : s.orders.find((o) => o.id === p.orderId)?.customerId;
+      if (id) parties[p.orderId] = { kind: 'customer', id };
+    }
+    if (typeof p.poId === 'string' && !parties[p.poId]) {
+      const id = typeof p.supplierId === 'string' ? p.supplierId : s.purchaseOrders.find((o) => o.id === p.poId)?.supplierId;
+      if (id) parties[p.poId] = { kind: 'supplier', id };
+    }
+  }
   return {
     decisionId: p.decisionId,
     status: p.status,
@@ -149,5 +162,6 @@ export function ledgerSlip(s: Readonly<CompanyState>, ledger: readonly GameEvent
     day: root.day,
     lines: shown,
     more: Math.max(0, lines.length - SLIP_LINES),
+    parties,
   };
 }

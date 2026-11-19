@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  COMMAND_LIMITS,
   type CeoCommand,
   createEngine,
   previewCustomDecision,
@@ -65,6 +66,8 @@ describe('Decision Room in the worker', () => {
     expect(v.telegram?.message.code).toBe('card.supplierPriceIncrease');
     expect(v.memo?.repriceMaterialId).toBe('steel');
     expect(v.memo?.limits.maxDiscountBps).toBe(5000);
+    // the pass-through bound is the engine's, not the UI's
+    expect(v.memo?.limits.maxPassThroughBps).toBe(COMMAND_LIMITS.maxPassThroughBps);
   });
 
   it('an unknown decision gets a null view', async () => {
@@ -133,6 +136,32 @@ describe('Decision Room in the worker', () => {
     expect(ofType(out, 'room')).toHaveLength(0);
   });
 
+  it('behind its tab (closeRoom) the room is not recalculated; reopened, it is posted once for the current version', async () => {
+    const { h, out } = await ready();
+    await h.handle({ type: 'openRoom', decisionId: DEC });
+    await h.idle();
+    // the CEO goes to the Desk: the store sends closeRoom; days pass with no forward runs for the room
+    await h.handle({ type: 'closeRoom' });
+    out.length = 0;
+    await h.handle({ type: 'advance', days: 3 });
+    await h.handle({ type: 'dispatch', command: { type: 'acknowledgeDevelopment', developmentId: 'dev-0001' } });
+    await h.idle();
+    expect(ofType(out, 'room')).toHaveLength(0);
+    // back in the room: one view, for today's state
+    await h.handle({ type: 'openRoom', decisionId: DEC });
+    await h.idle();
+    const rooms = ofType(out, 'room');
+    expect(rooms).toHaveLength(1);
+    expect(rooms[0]!.version).toBe(lastVersion(out));
+    expect(rooms[0]!.view!.day).toBe(4);
+    // asked again with nothing changed: the cached view is re-posted, identical
+    await h.handle({ type: 'closeRoom' });
+    await h.handle({ type: 'openRoom', decisionId: DEC });
+    await h.idle();
+    expect(ofType(out, 'room')).toHaveLength(2);
+    expect(ofType(out, 'room')[1]).toEqual(rooms[0]);
+  });
+
   it('a stale request (state moved on before the background ran) is not answered for the old version', async () => {
     const { h, out } = await ready();
     // openRoom and a dispatch in the same turn: only the newer version's room is posted
@@ -163,6 +192,9 @@ describe('Decision Room in the worker', () => {
     expect(codes).toContain('ledger.DevelopmentResolved');
     expect(codes).not.toContain('ledger.RngAdvanced');
     expect(slip.lines[0]!.cause).toEqual({ kind: 'command', commandId: 'cmd-0001', commandType: 'approveOption' });
+    // every purchase order on the slip is named by its supplier (the carbon copy prints no raw ids)
+    const po = slip.lines.find((l) => l.code === 'ledger.PurchaseOrderPlaced')!;
+    expect(slip.parties[po.params.poId as string]).toEqual({ kind: 'supplier', id: po.params.supplierId });
     const resolved = slip.lines.find((l) => l.code === 'ledger.DecisionResolved')!;
     expect(slip.lines.find((l) => l.code === 'ledger.SupplierPriceChanged')!.cause).toEqual({ kind: 'event', seq: resolved.seq });
     // the room (still open in the worker) now reads as closed
@@ -207,6 +239,22 @@ describe('Decision Room in the worker', () => {
       expect(p[0]!.preview).toEqual(structuredClone(previewCustomDecision(ref, DEC, memo)));
       // nothing changed: no report, no save
       expect(ofType(out, 'report')).toHaveLength(0);
+    });
+
+    it('a preview put away (cancelPreview) or superseded before it ran is not calculated', async () => {
+      const { h, out } = await ready();
+      // the memo was closed in the same turn: nothing is calculated or posted
+      const a = h.handle({ type: 'previewCustom', requestId: 4, decisionId: DEC, commands: memo });
+      const b = h.handle({ type: 'cancelPreview' });
+      await Promise.all([a, b]);
+      await h.idle();
+      expect(ofType(out, 'customPreview')).toHaveLength(0);
+      // two previews queued: only the newer one is answered
+      const c = h.handle({ type: 'previewCustom', requestId: 5, decisionId: DEC, commands: memo });
+      const d = h.handle({ type: 'previewCustom', requestId: 6, decisionId: DEC, commands: memo });
+      await Promise.all([c, d]);
+      await h.idle();
+      expect(ofType(out, 'customPreview').map((m) => m.requestId)).toEqual([6]);
     });
 
     it('a memo the engine refuses comes back with its CommandError', async () => {

@@ -18,6 +18,8 @@ export const COMMAND_LIMITS = {
   maxPurchaseQty: 10_000_000,
   maxUnitPrice: 1_000_000_000,
   maxDiscountBps: 5000,
+  /** repriceOrders: share of the cost rise passed on to open orders (10000 bps = all of it) */
+  maxPassThroughBps: 10_000,
 } as const;
 
 type Field =
@@ -39,7 +41,7 @@ const SHAPES: Readonly<Record<Command['type'] | OperationalCommand['type'], Shap
   acknowledgeDevelopment: { developmentId: ID },
   placePurchaseOrder: { supplierId: ID, materialId: ID, qty: int(1, COMMAND_LIMITS.maxPurchaseQty, 'error.invalidAmount') },
   switchSupplier: { materialId: ID, toSupplierId: ID },
-  repriceOrders: { materialId: ID, passThroughBps: int(0, 10000, 'error.invalidRate') },
+  repriceOrders: { materialId: ID, passThroughBps: int(0, COMMAND_LIMITS.maxPassThroughBps, 'error.invalidRate') },
   grantDiscount: { customerId: ID, discountBps: int(0, COMMAND_LIMITS.maxDiscountBps, 'error.invalidRate') },
   setSupplierPrice: { supplierId: ID, materialId: ID, unitPrice: int(1, COMMAND_LIMITS.maxUnitPrice, 'error.invalidAmount') },
   customerReaction: {

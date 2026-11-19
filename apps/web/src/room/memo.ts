@@ -85,11 +85,19 @@ export function parsePercent(text: string): number | null {
   return Number(whole) * 100 + Number(frac.padEnd(2, '0'));
 }
 
-/** A typed whole quantity: digits, optional thousands separators ("2.000", "2,000", "2 000"). */
+/**
+ * A typed whole quantity: plain digits ("12500") or digits grouped in thousands with one separator
+ * used throughout ("12.500", "12,500", "12 500"). Anything else ("2.5", "1,5", "0.5", "12.34.5",
+ * "1.234,567") is not a quantity: a decimal must never be read as a larger whole number.
+ */
+const QTY = /^(?:\d+|\d{1,3}(?:([.,\s])\d{3}(?:\1\d{3})*))$/;
+
 export function parseQty(text: string): number | null {
-  const s = text.trim().replace(/[.,\s]/g, '');
-  if (!/^\d{1,12}$/.test(s)) return null;
-  const n = Number(s);
+  const s = text.trim();
+  if (!QTY.test(s)) return null;
+  const digits = s.replace(/[.,\s]/g, '');
+  if (digits.length > 12) return null;
+  const n = Number(digits);
   return Number.isSafeInteger(n) ? n : null;
 }
 
@@ -101,7 +109,7 @@ export function lineToCommand(line: MemoLine, c: MemoCatalog): LineResult {
     case 'placePurchaseOrder': {
       if (!c.offers.some((o) => o.supplierId === line.supplierId && o.materialId === line.materialId)) return err('noOffer');
       const qty = parseQty(line.qty);
-      if (qty === null) return err('qty', { max: c.limits.maxPurchaseQty });
+      if (qty === null) return err('qtyFormat');
       if (qty < 1 || qty > c.limits.maxPurchaseQty) return err('qty', { max: c.limits.maxPurchaseQty });
       return { ok: true, command: { type: 'placePurchaseOrder', supplierId: line.supplierId, materialId: line.materialId, qty } };
     }

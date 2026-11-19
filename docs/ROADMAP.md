@@ -48,7 +48,11 @@ updated, a done-vs-outstanding report, and a stop for approval.
   baseline as the options) and sealed exactly as previewed; inputs are checked against
   `COMMAND_LIMITS` before the engine checks them again.
 - After a decision the Desk shows a ledger carbon copy (the decision's ledger lines with causes).
-- The room is computed in the worker only when no advance runs, tagged with the report version.
+- The room is computed in the worker only when no advance runs and only while it is in front,
+  tagged with the report version.
+- Review fixes: memo quantities accept only whole numbers or grouped thousands ("12.500", "12,500")
+  and show how they were read; the seal sends its command at the press; focus management; the
+  pass-through bound lives in `COMMAND_LIMITS.maxPassThroughBps`; no raw ids in the carbon copy.
 - Room money cells are printed in millions (unit in the row header) so +7 / +30 / +90 fit a note.
 
 ## Out of scope for now

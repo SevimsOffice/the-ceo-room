@@ -3,6 +3,7 @@ import { useT } from '../i18n';
 import { canDecide, currentMemoPreview, useGame } from '../store/game';
 import type { MemoCatalog, RoomView } from '../worker/protocol';
 import { Sheet } from '../desk/Sheet';
+import { pressMs } from './ActionBar';
 import { ImpactTable } from './ImpactTable';
 import {
   MEMO_MAX_LINES,
@@ -14,6 +15,7 @@ import {
   newLine,
   offeredMaterials,
   offeringSuppliers,
+  parseQty,
   sameMemo,
   switchTargets,
 } from './memo';
@@ -32,6 +34,7 @@ function LineFields({ line, c, index, onChange }: { line: MemoLine; c: MemoCatal
   switch (line.kind) {
     case 'placePurchaseOrder': {
       const mats = offeredMaterials(c, line.supplierId);
+      const qty = parseQty(line.qty);
       return (
         <>
           <label className={labelCls} htmlFor={id('supplier')}>
@@ -67,6 +70,12 @@ function LineFields({ line, c, index, onChange }: { line: MemoLine; c: MemoCatal
             {t.t('ui.room.memo.field.qty')}
             <input id={id('qty')} className={`${field} w-[150px]`} inputMode="numeric" value={line.qty} onChange={(e) => onChange({ ...line, qty: e.target.value })} data-testid="memo-qty" />
           </label>
+          {qty !== null && (
+            // how the typed figure was read, before any preview ("12.500" → 12.500 units)
+            <p className="m-0 self-center font-type text-label font-bold text-ink" aria-live="polite" data-testid="memo-qty-read">
+              {t.t('ui.room.memo.qtyRead', { qty, materialId: line.materialId })}
+            </p>
+          )}
         </>
       );
     }
@@ -185,7 +194,7 @@ export function MemoSheet({ v }: { v: RoomView }) {
           {lines.map((l, i) => (
             <li key={i} className="report-row py-2" data-testid="memo-line">
               <div className="flex flex-wrap items-end gap-3">
-                <span className="self-center font-display text-lg font-bold">{i + 1}.</span>
+                <span className="self-center font-display text-lg font-bold">{t.t('ui.room.memo.lineNumber', { n: i + 1 })}</span>
                 <span className="self-center font-type text-label font-bold">{t.t(`ui.room.memo.kind.${l.kind}`)}</span>
                 <LineFields line={l} c={c} index={i} onChange={(x) => update(i, x)} />
                 <button
@@ -261,11 +270,12 @@ export function MemoSheet({ v }: { v: RoomView }) {
               onClick={() => {
                 if (!canSeal) return;
                 setPressing(true);
-                sealMemo();
+                sealMemo(pressMs());
               }}
-              disabled={!canSeal}
+              // aria-disabled, not disabled: the pressed seal keeps the keyboard focus
+              aria-disabled={!canSeal}
               aria-label={t.t('ui.room.memo.seal.aria')}
-              className={`flex h-[96px] w-[96px] cursor-pointer items-center justify-center border-0 p-0 disabled:cursor-not-allowed disabled:opacity-50 ${pressing ? 'seal-press' : ''}`}
+              className={`flex h-[96px] w-[96px] cursor-pointer items-center justify-center border-0 p-0 aria-disabled:cursor-not-allowed ${pressing ? 'seal-press' : 'aria-disabled:opacity-50'}`}
               style={{
                 borderRadius: '52% 48% 50% 50% / 50% 52% 48% 50%',
                 background: 'radial-gradient(circle at 35% 28%,#c23a37,#7a1a1c 55%,#4a0b0e)',

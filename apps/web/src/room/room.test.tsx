@@ -14,8 +14,10 @@ import type { WorkerRequest } from '../worker/protocol';
 import { setTransport, useGame } from '../store/game';
 import { buildDirectory } from '../worker/directory';
 import { DecisionRoom } from './DecisionRoom';
+import { deskFocusTarget } from '../desk/Desk';
 import { PRESS_MS } from './ActionBar';
 import { deltaCell, millions } from './impact';
+import { optionName } from './names';
 import { answersDemand, availableKinds, lineToCommand, memoCommands, newLine, parsePercent, parseQty, sameMemo, switchTargets } from './memo';
 
 const seed = loadSeed();
@@ -38,6 +40,21 @@ describe('memo lines', () => {
     expect(parseQty('2,000')).toBe(2000);
     expect(parseQty('1.5x')).toBeNull();
     expect(parseQty('')).toBeNull();
+  });
+
+  it('never reads a decimal quantity as a larger whole number; grouped thousands are accepted', () => {
+    // review fix: "2.5" was read as 25 and "1,5" as 15
+    for (const bad of ['2.5', '1,5', '0.5', '12.34.5', '1.234,567', '12.50', '1 5', '.500', '12.']) expect(parseQty(bad), bad).toBeNull();
+    expect(parseQty('12.500')).toBe(12500);
+    expect(parseQty('12,500')).toBe(12500);
+    expect(parseQty('12500')).toBe(12500);
+    expect(parseQty('12 500')).toBe(12500);
+    expect(parseQty('1.250.000')).toBe(1_250_000);
+    const po = (qty: string) => lineToCommand({ kind: 'placePurchaseOrder', supplierId: 'sup_kuzeycelik', materialId: 'steel', qty }, catalog);
+    expect(po('2.5')).toMatchObject({ ok: false, error: { key: 'ui.room.memo.error.qtyFormat' } });
+    expect(po('1,5')).toMatchObject({ ok: false, error: { key: 'ui.room.memo.error.qtyFormat' } });
+    expect(po('12.500')).toMatchObject({ ok: true, command: { qty: 12500 } });
+    expect(tr.has('ui.room.memo.error.qtyFormat') && en.has('ui.room.memo.error.qtyFormat')).toBe(true);
   });
 
   it('builds exactly the engine’s intent commands, within its limits', () => {
@@ -120,7 +137,7 @@ describe('DecisionRoom', () => {
     expect(screen.getByTestId('room-figure-figure.cash').textContent).toBe(tr.money(selectDecision(engine.state(), 'dec-0001')!.supportingFigures[0]!.value));
   });
 
-  it('choosing an option then pressing the seal sends approveOption after the press', () => {
+  it('choosing an option then pressing the seal sends approveOption at the press (the seal coming down is only drawn)', () => {
     vi.useFakeTimers();
     render(<DecisionRoom />);
     fireEvent.click(screen.getByTestId('approve-seal'));
@@ -130,11 +147,82 @@ describe('DecisionRoom', () => {
     expect(useGame.getState().room?.selected).toBe('switch');
     fireEvent.click(screen.getByTestId('approve-seal'));
     expect(screen.getByTestId('approved-stamp')).toBeTruthy();
-    expect(sent).toEqual([]);
+    expect(sent).toEqual([{ type: 'dispatch', command: { type: 'approveOption', decisionId: 'dec-0001', optionId: 'switch' } }]);
     act(() => {
       vi.advanceTimersByTime(PRESS_MS);
     });
-    expect(sent).toEqual([{ type: 'dispatch', command: { type: 'approveOption', decisionId: 'dec-0001', optionId: 'switch' } }]);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('leaving the room during the press does not drop the command', () => {
+    vi.useFakeTimers();
+    useGame.setState({ room: { ...useGame.getState().room!, selected: 'negotiate' } });
+    render(<DecisionRoom />);
+    fireEvent.click(screen.getByTestId('approve-seal'));
+    // the room goes away at once (e.g. the CEO switched rooms): nothing is waiting on a timer
+    cleanup();
+    act(() => {
+      vi.advanceTimersByTime(PRESS_MS * 2);
+    });
+    expect(sent).toEqual([{ type: 'dispatch', command: { type: 'approveOption', decisionId: 'dec-0001', optionId: 'negotiate' } }]);
+  });
+
+  it('focus: the options heading on opening; the pressed seal keeps focus (aria-disabled) and has it back after a refusal', () => {
+    useGame.setState({ room: { ...useGame.getState().room!, selected: 'switch' } });
+    render(<DecisionRoom />);
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: /seçenek/ }));
+    const seal = screen.getByTestId('approve-seal');
+    seal.focus();
+    fireEvent.click(seal);
+    expect(useGame.getState().room?.pending).toBe('approve');
+    expect(seal.getAttribute('aria-disabled')).toBe('true');
+    expect(seal.hasAttribute('disabled')).toBe(false);
+    expect(document.activeElement).toBe(seal);
+    // a second press while it is being sent does nothing
+    fireEvent.click(seal);
+    expect(sent.filter((m) => m.type === 'dispatch')).toHaveLength(1);
+    act(() => {
+      useGame.getState().receive({ type: 'dispatched', ok: false, command: { type: 'approveOption', decisionId: 'dec-0001', optionId: 'switch' }, error: { code: 'error.decisionClosed', params: {} } });
+    });
+    expect(useGame.getState().room?.pending).toBeNull();
+    expect(screen.queryByTestId('approved-stamp')).toBeNull();
+    expect(seal.getAttribute('aria-disabled')).toBe('false');
+    expect(document.activeElement).toBe(seal);
+  });
+
+  it('every joined phrase comes from the catalogue (option names, advisor title and signature, deadline line)', () => {
+    useGame.setState({ locale: 'en' });
+    render(<DecisionRoom />);
+    const cfo = view.advisors[0]!;
+    expect(screen.getByTestId('advisor-cfo').querySelector('h3')!.textContent).toBe(en.t('ui.room.advisor.title', { title: en.t(cfo.titleKey), role: 'CFO' }));
+    expect(screen.getByTestId('advisor-cfo').querySelector('[data-testid=advisor-signature]')!.textContent).toBe(en.t('ui.room.advisor.signature', { name: cfo.advisorName, role: 'CFO' }));
+    expect(screen.getByTestId('room-deadline').textContent).toContain(' · ');
+    const sw = view.options.find((o) => o.id === 'switch')!;
+    expect(optionName(en, view, 'switch')).toBe(en.t('ui.room.optionName', { letter: 'B', label: en.t(sw.labelKey) }));
+    expect(optionName(en, view, 'switch')).toMatch(/^B — /);
+    expect(optionName(tr, view, 'absorb')).toBe(tr.t('ui.room.baselineName', { label: tr.t(view.options[0]!.labelKey) }));
+    for (const loc of [tr, en]) {
+      for (const k of ['ui.room.optionName', 'ui.room.advisor.title', 'ui.room.advisor.signature', 'ui.room.deadlineLine', 'ui.room.memo.lineNumber', 'ui.room.withNote', 'ui.room.memo.qtyRead']) {
+        expect(loc.has(k), `${loc.locale} ${k}`).toBe(true);
+      }
+    }
+  });
+
+  it('the memo shows how a typed quantity was read, before any preview', () => {
+    useGame.setState({ room: { ...useGame.getState().room!, memoOpen: true } });
+    render(<DecisionRoom />);
+    // the steel decision opens the memo on a purchase-order line (no demand to answer)
+    const qty = screen.getByTestId('memo-qty');
+    fireEvent.change(qty, { target: { value: '12.500' } });
+    const named = createTranslator('tr', { directory: buildDirectory(engine.state()) });
+    expect(screen.getByTestId('memo-qty-read').textContent).toBe(named.t('ui.room.memo.qtyRead', { qty: 12500, materialId: 'steel' }));
+    expect(screen.getByTestId('memo-qty-read').textContent).toContain('12.500 birim');
+    fireEvent.change(qty, { target: { value: '12500' } });
+    expect(screen.getByTestId('memo-qty-read').textContent).toContain('12.500 birim');
+    fireEvent.change(qty, { target: { value: '2.5' } });
+    expect(screen.queryByTestId('memo-qty-read')).toBeNull();
+    expect(screen.getByTestId('memo-error').textContent).toBe(tr.t('ui.room.memo.error.qtyFormat'));
+    expect(sent.filter((m) => m.type === 'previewCustom')).toHaveLength(0);
   });
 
   it('while its figures are for an older day the room shows no numbers', () => {
@@ -142,5 +230,24 @@ describe('DecisionRoom', () => {
     render(<DecisionRoom />);
     expect(screen.queryAllByTestId('option-note')).toHaveLength(0);
     expect(screen.getByTestId('room-note').textContent).toContain('hesaplıyor');
+  });
+});
+
+describe('focus on the Desk after the room closes', () => {
+  it('goes to the carbon copy of that decision, else its telegram, else its folder, else the morning report', () => {
+    const root = document.createElement('div');
+    root.innerHTML = `
+      <h2 id="report-title" tabindex="-1">report</h2>
+      <button data-testid="decision-folder" data-decision="dec-0001">folder</button>
+      <article data-testid="telegram" data-decision="dec-0001"><button>telegram</button></article>
+      <button data-testid="ledger-slip" data-decision="dec-0001">slip</button>`;
+    const pick = (id: string | null) => deskFocusTarget(root, id)?.textContent;
+    expect(pick('dec-0001')).toBe('slip');
+    root.querySelector('[data-testid=ledger-slip]')!.setAttribute('data-decision', 'dec-0002');
+    expect(pick('dec-0001')).toBe('telegram');
+    root.querySelector('[data-testid=telegram]')!.remove();
+    expect(pick('dec-0001')).toBe('folder');
+    expect(pick('dec-0003')).toBe('report');
+    expect(pick(null)).toBe('report');
   });
 });

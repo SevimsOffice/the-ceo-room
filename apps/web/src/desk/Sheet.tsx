@@ -4,7 +4,8 @@ import { PaperNoise } from './Atmosphere';
 
 /**
  * A sheet of paper laid over the desk (modal): focus moves in, Tab stays inside, Escape or the
- * close button puts it away and focus returns to what opened it.
+ * close button puts it away and focus returns to what opened it, or, when that is gone (a sheet
+ * that opened by itself, e.g. the carbon copy after the Decision Room closed), to `returnFocus`.
  */
 export function Sheet({
   title,
@@ -13,6 +14,7 @@ export function Sheet({
   width = 820,
   testId,
   role = 'dialog',
+  returnFocus,
 }: {
   title: ReactNode;
   onClose: () => void;
@@ -20,11 +22,14 @@ export function Sheet({
   width?: number;
   testId?: string;
   role?: 'dialog' | 'alertdialog';
+  returnFocus?: () => HTMLElement | null;
 }) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const returnRef = useRef(returnFocus);
+  returnRef.current = returnFocus;
 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
@@ -54,7 +59,8 @@ export function Sheet({
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      opener?.focus?.();
+      if (opener && opener !== document.body && opener.isConnected) opener.focus?.();
+      else returnRef.current?.()?.focus();
     };
   }, []);
 

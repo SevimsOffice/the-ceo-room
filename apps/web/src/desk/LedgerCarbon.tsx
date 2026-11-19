@@ -1,15 +1,25 @@
+import { useRef } from 'react';
 import type { Translator } from '@ceo-room/i18n';
 import { useT } from '../i18n';
 import { useGame } from '../store/game';
-import type { LedgerCause, LedgerLine, LedgerSlip } from '../worker/protocol';
+import type { LedgerCause, LedgerLine, LedgerParty, LedgerSlip } from '../worker/protocol';
 import { Sheet } from './Sheet';
 import { decisionNumber } from './figures';
+
+/** The number at the end of a record id ("ord-0012" → "12"); the id itself when it has none. */
+export function refNumber(id: string): string {
+  const m = /(\d+)$/.exec(id);
+  return m ? String(Number(m[1])) : id;
+}
+
+const partyName = (t: Translator, p: LedgerParty): string =>
+  p.kind === 'customer' ? t.t('ui.room.memo.customerName', { customerId: p.id }) : t.t('ui.room.memo.supplierName', { supplierId: p.id });
 
 /** Why a line happened, in words: the CEO's instruction, an earlier line, or an engine rule. */
 export function causeText(t: Translator, c: LedgerCause): string {
   switch (c.kind) {
     case 'command':
-      return t.t('ui.ledger.cause.command', { commandId: c.commandId, type: t.t(`ui.command.${c.commandType}`) });
+      return t.t('ui.ledger.cause.command', { type: t.t(`ui.command.${c.commandType}`) });
     case 'event':
       return t.t('ui.ledger.cause.event', { seq: c.seq });
     case 'rule':
@@ -17,15 +27,38 @@ export function causeText(t: Translator, c: LedgerCause): string {
   }
 }
 
-/** A ledger line in words; the decision's status, option and command names are translated. */
+/** Record ids printed as their number only (telegrams, bills, invoices, recurring costs). */
+const NUMBERED = ['developmentId', 'payableId', 'receivableId', 'costId'] as const;
+
+/**
+ * A ledger line in words. No raw record id is printed: a decision reads as its number, the CEO's
+ * instruction by its name, an order or purchase order by its number and counterparty; the
+ * decision's status, option and command names are translated.
+ */
 export function lineText(t: Translator, slip: LedgerSlip, l: LedgerLine): string {
   const params: Record<string, string | number | boolean | null> = { ...l.params };
+  if (l.code === 'ledger.CommandAccepted') {
+    const type = typeof params.commandType === 'string' ? t.t(`ui.command.${params.commandType}`) : '';
+    return t.t('ui.ledger.line.commandAccepted', { type });
+  }
   if (l.code === 'ledger.DecisionResolved') {
     if (typeof params.status === 'string') params.status = t.t(`ui.decision.status.${params.status}`);
     if (params.optionId === 'custom') params.optionId = t.t('ui.ledger.customOption');
     else if (slip.optionLabelKey && params.optionId === slip.optionId) params.optionId = t.t(slip.optionLabelKey);
   }
-  if (l.code === 'ledger.CommandAccepted' && typeof params.commandType === 'string') params.commandType = t.t(`ui.command.${params.commandType}`);
+  if (typeof params.decisionId === 'string') params.decisionId = t.t('ui.ledger.ref.decision', { n: decisionNumber(params.decisionId) });
+  for (const k of ['orderId', 'poId'] as const) {
+    const id = params[k];
+    if (typeof id !== 'string') continue;
+    const party = slip.parties[id];
+    // the line names the counterparty itself: the number is enough
+    const named = party !== undefined && (params.customerId === party.id || params.supplierId === party.id);
+    params[k] = party && !named ? t.t('ui.ledger.ref.party', { n: refNumber(id), party: partyName(t, party) }) : t.t('ui.ledger.ref.number', { n: refNumber(id) });
+  }
+  for (const k of NUMBERED) {
+    const id = params[k];
+    if (typeof id === 'string') params[k] = t.t('ui.ledger.ref.number', { n: refNumber(id) });
+  }
   return t.t(l.code, params);
 }
 
@@ -48,15 +81,18 @@ export function LedgerCarbon() {
   const open = useGame((s) => s.ledgerOpen);
   const openLedger = useGame((s) => s.openLedger);
   const close = useGame((s) => s.closeLedger);
+  const slipButton = useRef<HTMLButtonElement>(null);
   if (!slip) return null;
   return (
     <>
       <button
+        ref={slipButton}
         type="button"
         onClick={openLedger}
         className="press on-paper absolute bottom-[26px] left-[61px] z-10 box-border flex min-h-touch w-[290px] cursor-pointer flex-col items-start justify-center border-0 px-4 py-1.5 text-left"
         style={{ background: 'linear-gradient(180deg,#e6dcc0,#d8ccab)', color: '#2c2547', transform: 'rotate(-1deg)', boxShadow: '0 8px 16px rgba(0,0,0,.5)' }}
         data-testid="ledger-slip"
+        data-decision={slip.decisionId}
       >
         <span className="font-type text-label font-bold uppercase tracking-[.12em]">{t.t('ui.ledger.carbon')}</span>
         <span className="font-type text-label leading-tight" data-testid="ledger-slip-title">
@@ -64,7 +100,7 @@ export function LedgerCarbon() {
         </span>
       </button>
       {open && (
-        <Sheet title={t.t('ui.ledger.heading')} onClose={close} width={860} testId="ledger-sheet">
+        <Sheet title={t.t('ui.ledger.heading')} onClose={close} width={860} testId="ledger-sheet" returnFocus={() => slipButton.current}>
           <p className="m-0 mt-3 font-display text-lg font-bold" data-testid="ledger-sheet-title">
             {slipTitle(t, slip)}
           </p>

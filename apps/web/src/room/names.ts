@@ -15,7 +15,7 @@ export function optionName(t: Translator, v: RoomView, optionId: string): string
   const o = v.options.find((x) => x.id === optionId);
   const label = o ? t.t(o.labelKey) : optionId;
   if (optionId === v.defaultOptionId) return t.t('ui.room.baselineName', { label });
-  return `${optionLetters(v).get(optionId) ?? ''} — ${label}`;
+  return t.t('ui.room.optionName', { letter: optionLetters(v).get(optionId) ?? '', label });
 }
 
 /** An engine message whose option ids are printed as the options' names. */

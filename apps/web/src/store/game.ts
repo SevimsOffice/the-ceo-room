@@ -43,6 +43,11 @@ export interface RoomState {
   /** the custom decision memo is open */
   memoOpen: boolean;
   memo: MemoPreview | null;
+  /**
+   * the engine took the decision: the room shows its last view (frozen) until the seal or stamp has
+   * come down, then gives way to the Desk. The command was sent at the press, not after it.
+   */
+  leaving?: boolean;
 }
 
 export interface GameState {
@@ -98,22 +103,29 @@ export interface GameState {
   dismissNotice(): void;
   /** open the Decision Room on a decision (from a telegram, a folder or a dossier) */
   openRoom(decisionId: string): void;
-  /** back to the Desk; the room stays open behind its tab */
+  /**
+   * back to the Desk; the room stays open behind its tab, but the worker stops recalculating it
+   * (and its memo preview) until the CEO returns. Refused while a decision is being sent.
+   */
   showDesk(): void;
+  /** back to the room: its view (and an open memo's preview) is recalculated once, for today */
   showRoom(): void;
   /** put the decision back in its folder: the room and its tab go away */
   closeRoom(): void;
   selectOption(optionId: string): void;
-  /** press the seal on the selected option */
-  approve(): void;
-  /** the ink stamp: runs the default option */
-  reject(): void;
+  /**
+   * press the seal on the selected option. The command is sent at once; `pressMs` is how long the
+   * seal takes to come down, during which the room stays in front once the engine has answered.
+   */
+  approve(pressMs?: number): void;
+  /** the ink stamp: runs the default option (sent at once, like the seal) */
+  reject(pressMs?: number): void;
   requestAnalysis(): void;
   openMemo(): void;
   closeMemo(): void;
   previewMemo(commands: CeoCommand[]): void;
   /** seal the previewed memo (only when its preview is current and the engine accepted it) */
-  sealMemo(): void;
+  sealMemo(pressMs?: number): void;
   openLedger(): void;
   closeLedger(): void;
   receive(msg: WorkerResponse): void;
@@ -139,9 +151,13 @@ const stopTimer = (): void => {
 export const sheetOpen = (s: Pick<GameState, 'dossier' | 'orderBook' | 'confirmingNewGame'> & Partial<Pick<GameState, 'view' | 'ledgerOpen'>>): boolean =>
   s.dossier !== null || s.orderBook !== null || s.confirmingNewGame || s.view === 'room' || s.ledgerOpen === true;
 
-/** The room view for the report on the desk, or null while it is being (re)calculated. */
+/**
+ * The room view for the report on the desk, or null while it is being (re)calculated. While the
+ * room is leaving (the decision was taken) its last view stays in front until the press ends.
+ */
 export function currentRoomView(s: Pick<GameState, 'room' | 'version'>): RoomView | null {
   const v = s.room?.view;
+  if (s.room?.leaving) return v?.data ?? null;
   return v && v.version === s.version ? v.data : null;
 }
 
@@ -158,6 +174,33 @@ export function canDecide(s: GameState): boolean {
 }
 
 let memoRequest = 0;
+
+/**
+ * The seal or stamp coming down on a decision (visual only: its command was already sent). When
+ * the engine answers before it is down, the room waits for it before giving way to the Desk.
+ */
+let press: { decisionId: string; done: boolean; timer: ReturnType<typeof setTimeout> | null } | null = null;
+
+function startPress(decisionId: string, ms: number): void {
+  if (press?.timer) clearTimeout(press.timer);
+  const p: NonNullable<typeof press> = { decisionId, done: !(ms > 0), timer: null };
+  press = p;
+  if (p.done) return;
+  p.timer = setTimeout(() => {
+    p.done = true;
+    p.timer = null;
+    finishLeaving();
+  }, ms);
+}
+
+/** The decision is taken and its press is down: the room goes, the Desk (and carbon copy) is in front. */
+function finishLeaving(): void {
+  const r = useGame.getState().room;
+  if (!r?.leaving) return;
+  if (press && press.decisionId === r.decisionId && !press.done) return;
+  press = null;
+  useGame.setState({ room: null, view: 'desk' });
+}
 
 const DECIDING: readonly Command['type'][] = ['approveOption', 'rejectDecision', 'customDecision'];
 
@@ -272,14 +315,31 @@ export const useGame = create<GameState>()((set, get) => ({
 
   openRoom(decisionId) {
     const s = get();
+    if (s.room?.decisionId === decisionId) return s.showRoom();
+    if (s.room?.pending) return;
     set({ view: 'room', dossier: null, orderBook: null, ledgerOpen: false });
-    if (s.room?.decisionId === decisionId) return;
     set({ room: { decisionId, view: null, selected: null, pending: null, memoOpen: false, memo: null } });
     transport.send({ type: 'openRoom', decisionId });
   },
-  showDesk: () => set({ view: 'desk' }),
+  showDesk() {
+    const s = get();
+    if (s.view === 'desk') return;
+    // a decision being sent keeps the room in front until the engine answers
+    if (s.room?.pending) return;
+    set({ view: 'desk' });
+    // the room behind its tab is not recalculated while the Desk is in front
+    if (s.room) transport.send({ type: 'closeRoom' });
+  },
   showRoom() {
-    if (get().room) set({ view: 'room', dossier: null, orderBook: null, ledgerOpen: false });
+    const s = get();
+    const r = s.room;
+    if (!r) return;
+    set({ dossier: null, orderBook: null, ledgerOpen: false });
+    if (s.view === 'room') return;
+    set({ view: 'room' });
+    // recalculated once for today's state (the worker re-posts its cached view when nothing changed)
+    transport.send({ type: 'openRoom', decisionId: r.decisionId });
+    refreshMemo();
   },
   closeRoom() {
     if (!get().room) return;
@@ -292,18 +352,20 @@ export const useGame = create<GameState>()((set, get) => ({
     if (!r || !v || r.pending || optionId === v.defaultOptionId || !v.options.some((o) => o.id === optionId)) return;
     set({ room: { ...r, selected: optionId } });
   },
-  approve() {
+  approve(pressMs = 0) {
     const s = get();
     const r = s.room;
     if (!r || !r.selected || !canDecide(s)) return;
     set({ room: { ...r, pending: 'approve' } });
+    startPress(r.decisionId, pressMs);
     transport.send({ type: 'dispatch', command: { type: 'approveOption', decisionId: r.decisionId, optionId: r.selected } });
   },
-  reject() {
+  reject(pressMs = 0) {
     const s = get();
     const r = s.room;
     if (!r || !canDecide(s)) return;
     set({ room: { ...r, pending: 'reject' } });
+    startPress(r.decisionId, pressMs);
     transport.send({ type: 'dispatch', command: { type: 'rejectDecision', decisionId: r.decisionId } });
   },
   requestAnalysis() {
@@ -320,7 +382,11 @@ export const useGame = create<GameState>()((set, get) => ({
   },
   closeMemo() {
     const r = get().room;
-    if (r) set({ room: { ...r, memoOpen: false } });
+    // the memo's lines go with the sheet: its preview is dropped (a late answer is ignored, and no
+    // new preview is asked for after a day or a dispatch)
+    if (!r) return;
+    set({ room: { ...r, memoOpen: false, memo: null } });
+    if (r.memo?.status === 'waiting') transport.send({ type: 'cancelPreview' });
   },
   previewMemo(commands) {
     const s = get();
@@ -331,12 +397,13 @@ export const useGame = create<GameState>()((set, get) => ({
     set({ room: { ...r, memo: { requestId: memoRequest, commands: copy, status: 'waiting', version: s.version, preview: null } } });
     transport.send({ type: 'previewCustom', requestId: memoRequest, decisionId: r.decisionId, commands: copy });
   },
-  sealMemo() {
+  sealMemo(pressMs = 0) {
     const s = get();
     const r = s.room;
     const m = currentMemoPreview(s);
     if (!r || !m || m.status !== 'ready' || !m.preview || m.preview.impact.error || !canDecide(s)) return;
     set({ room: { ...r, pending: 'custom' } });
+    startPress(r.decisionId, pressMs);
     transport.send({ type: 'dispatch', command: { type: 'customDecision', decisionId: r.decisionId, commands: m.commands } });
   },
   openLedger() {
@@ -408,9 +475,11 @@ export const useGame = create<GameState>()((set, get) => ({
         }
         if (!mine || !r) return;
         if (DECIDING.includes(cmd.type)) {
-          // the decision is taken: back to the Desk, where the carbon copy of its ledger lines waits
-          set({ room: null, view: 'desk', slipFor: r.decisionId });
+          // the decision is taken: back to the Desk (once the seal is down), where the carbon copy
+          // of its ledger lines waits
+          set({ room: { ...r, leaving: true }, slipFor: r.decisionId });
           transport.send({ type: 'closeRoom' });
+          finishLeaving();
         } else {
           set({ room: { ...r, pending: null } });
         }
@@ -459,11 +528,14 @@ export const useGame = create<GameState>()((set, get) => ({
   },
 }));
 
-/** Ask again for a memo preview made for an older state (after a day or a dispatch). */
+/**
+ * Ask again for a memo preview made for an older state (after a day or a dispatch), only while the
+ * memo is open and the room is in front (on return from the Desk it is asked then).
+ */
 function refreshMemo(): void {
   const s = useGame.getState();
   const m = s.room?.memo;
-  if (!m || m.status === 'waiting' || m.version === s.version) return;
+  if (!m || !s.room?.memoOpen || s.view !== 'room' || s.room.leaving || m.status === 'waiting' || m.version === s.version) return;
   s.previewMemo(m.commands);
 }
 

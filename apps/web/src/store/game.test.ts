@@ -7,6 +7,7 @@ import { loadSeed } from '@ceo-room/seed-data';
 import type { SeedBundle } from '@ceo-room/engine';
 import { createHandler } from '../worker/handler';
 import type { StoredSave, WorkerRequest, WorkerResponse } from '../worker/protocol';
+import { PRESS_MS } from '../room/ActionBar';
 import { PLAY_INTERVAL_MS, canDecide, currentMemoPreview, currentRoomView, setTransport, useGame } from './game';
 import { BACKUP_KEY, SAVE_KEY } from './storage';
 
@@ -349,15 +350,22 @@ describe('Decision Room', () => {
 
     useGame.getState().showDesk();
     expect(useGame.getState().view).toBe('desk');
+    // behind its tab the room is not recalculated (no forward runs while the Desk is in front)
+    expect(c.sent.at(-1)).toEqual({ type: 'closeRoom' });
+    const roomsBefore = room()!.view;
     useGame.getState().advance(3);
     await c.settle();
     expect(day()).toBe(4);
-    // only one room view after the advance (none during it), for the new version
+    expect(room()!.view).toEqual(roomsBefore);
+    expect(currentRoomView(useGame.getState())).toBeNull();
+    // back in the room: recalculated once, for the new version
+    useGame.getState().showRoom();
+    expect(useGame.getState().view).toBe('room');
+    expect(c.sent.at(-1)).toEqual({ type: 'openRoom', decisionId: DEC });
+    await c.settle();
     const fresh = currentRoomView(useGame.getState())!;
     expect(fresh.day).toBe(4);
     expect(fresh.daysLeft).toBe(4);
-    useGame.getState().showRoom();
-    expect(useGame.getState().view).toBe('room');
     useGame.getState().closeRoom();
     expect(useGame.getState().room).toBeNull();
     expect(c.sent.at(-1)).toEqual({ type: 'closeRoom' });
@@ -405,19 +413,71 @@ describe('Decision Room', () => {
     await c.settle();
     expect(currentMemoPreview(useGame.getState())?.preview?.impact.error).toBeNull();
 
-    // a day passes (memo open on another tab): the preview is asked again for the new state
+    // a day passes (memo open behind the room's tab): no preview while the Desk is in front...
     useGame.getState().showDesk();
     useGame.getState().advance(1);
+    await c.settle();
+    expect(c.sent.filter((m) => m.type === 'previewCustom')).toHaveLength(1);
+    expect(currentMemoPreview(useGame.getState())).toBeNull();
+    // ...and it is asked again, once, for the new state on return
+    useGame.getState().showRoom();
     await c.settle();
     expect(c.sent.filter((m) => m.type === 'previewCustom')).toHaveLength(2);
     expect(currentMemoPreview(useGame.getState())?.version).toBe(useGame.getState().version);
 
-    useGame.getState().showRoom();
     useGame.getState().sealMemo();
     expect(c.sent.at(-1)).toEqual({ type: 'dispatch', command: { type: 'customDecision', decisionId: DEC, commands: memo } });
     await c.settle();
     expect(useGame.getState().room).toBeNull();
     expect(useGame.getState().ledgerSlip).toMatchObject({ custom: true, status: 'approved' });
+  });
+
+  it('closing the memo drops its preview: a waiting one is cancelled, and none is asked for after a day', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    await c.settle();
+    const memo = [{ type: 'repriceOrders' as const, materialId: 'steel', passThroughBps: 5000 }];
+    useGame.getState().openMemo();
+    useGame.getState().previewMemo(memo);
+    useGame.getState().closeMemo();
+    expect(room()?.memo).toBeNull();
+    expect(c.sent.at(-1)).toEqual({ type: 'cancelPreview' });
+    await c.settle();
+    expect(room()?.memo).toBeNull();
+    // a previewed memo, then closed: a new day asks for nothing
+    useGame.getState().openMemo();
+    useGame.getState().previewMemo(memo);
+    await c.settle();
+    useGame.getState().closeMemo();
+    const asked = c.sent.filter((m) => m.type === 'previewCustom').length;
+    useGame.getState().advance(1);
+    await c.settle();
+    expect(c.sent.filter((m) => m.type === 'previewCustom')).toHaveLength(asked);
+    expect(room()?.memo).toBeNull();
+  });
+
+  it('the seal sends at once: leaving during the press cannot drop it; the tabs wait while it is sent', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    await c.settle();
+    useGame.getState().selectOption('negotiate');
+    useGame.getState().approve(PRESS_MS);
+    // sent at the press, not after the animation
+    expect(c.sent.at(-1)).toEqual({ type: 'dispatch', command: { type: 'approveOption', decisionId: DEC, optionId: 'negotiate' } });
+    // the CEO tries to leave for the Desk while the seal comes down: the room stays until it is taken
+    useGame.getState().showDesk();
+    expect(useGame.getState().view).toBe('room');
+    expect(c.sent.filter((m) => m.type === 'closeRoom')).toHaveLength(0);
+    await c.settle();
+    // taken by the engine: its carbon copy is ready, the room shows its last view until the press is down
+    expect(useGame.getState().report?.pendingDecisions).toEqual([]);
+    expect(useGame.getState().ledgerSlip).toMatchObject({ decisionId: DEC, status: 'approved', optionId: 'negotiate' });
+    expect(useGame.getState().ledgerOpen).toBe(true);
+    await new Promise((r) => setTimeout(r, PRESS_MS + 20));
+    expect(useGame.getState().room).toBeNull();
+    expect(useGame.getState().view).toBe('desk');
   });
 
   it('a memo the engine refuses cannot be sealed', async () => {

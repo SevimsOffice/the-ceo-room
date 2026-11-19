@@ -34,9 +34,7 @@ export function ImpactTable({ horizons, today, testId }: { horizons: readonly Ho
                 ) : (
                   <>
                     <span aria-hidden="true">{t.t('ui.room.horizonShort', { days: h.horizonDays })}</span>
-                    <span className="sr-only">
-                      {head.title} ({head.day})
-                    </span>
+                    <span className="sr-only">{t.t('ui.room.withNote', { text: head.title, note: head.day })}</span>
                   </>
                 )}
               </th>
@@ -51,9 +49,7 @@ export function ImpactTable({ horizons, today, testId }: { horizons: readonly Ho
             <tr key={m} className="grid items-baseline gap-x-1 border-b border-dotted border-[rgba(60,40,20,.55)] py-[3px]" style={{ gridTemplateColumns: cols }} data-metric={m}>
               <th scope="row" className="p-0 text-left font-normal leading-tight text-ink-muted">
                 <span aria-hidden="true">{t.t(`ui.room.short.${m}`)}</span>
-                <span className="sr-only">
-                  {label.label} ({label.unit})
-                </span>
+                <span className="sr-only">{t.t('ui.room.withNote', { text: label.label, note: label.unit })}</span>
               </th>
               {horizons.map((h) => {
                 const c = deltaCell(t, m, h);

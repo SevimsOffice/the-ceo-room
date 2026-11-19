@@ -124,6 +124,14 @@ export interface LedgerSlip {
   lines: LedgerLine[];
   /** lines left out of `lines` (the slip keeps the first ones) */
   more: number;
+  /** who an order (customer) or purchase order (supplier) named in `lines` is with, where known */
+  parties: Record<string, LedgerParty>;
+}
+
+/** The counterparty of an order or a purchase order, so the slip can name it instead of its id. */
+export interface LedgerParty {
+  kind: 'customer' | 'supplier';
+  id: string;
 }
 
 /** Engine thresholds the Desk needs to word a figure (from the engine's tuning). */
@@ -148,11 +156,17 @@ export type WorkerRequest =
   | { type: 'stop' }
   | { type: 'openDecision'; decisionId: string }
   | { type: 'openOrderBook' }
-  /** open the Decision Room on a decision: its view is posted now and after every state change */
+  /**
+   * open the Decision Room on a decision: its view is posted now and after every state change.
+   * Also sent when the CEO comes back to the room from the Desk (the view is recalculated once).
+   */
   | { type: 'openRoom'; decisionId: string }
+  /** the room is closed, or behind its tab while the Desk is in front: stop recalculating it */
   | { type: 'closeRoom' }
   /** preview a custom decision memo (+7 / +30) without changing anything */
-  | { type: 'previewCustom'; requestId: number; decisionId: string; commands: CeoCommand[] };
+  | { type: 'previewCustom'; requestId: number; decisionId: string; commands: CeoCommand[] }
+  /** the memo was put away: a preview not yet calculated is dropped (a newer previewCustom also drops older ones) */
+  | { type: 'cancelPreview' };
 
 export type WorkerResponse =
   | {

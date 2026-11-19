@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useT } from '../i18n';
 import { useGame } from '../store/game';
 import { DeskPlanks, FilmGrain, LampLight, Vignette, WoodGrain } from './Atmosphere';
@@ -18,6 +19,23 @@ import { LedgerCarbon } from './LedgerCarbon';
 import { DecisionRoom } from '../room/DecisionRoom';
 
 /**
+ * Where focus goes on the Desk when the Decision Room on `decisionId` has closed (its controls are
+ * gone): the carbon copy of that decision, else its telegram or folder, else the morning report.
+ */
+export function deskFocusTarget(root: ParentNode, decisionId: string | null): HTMLElement | null {
+  const slip = root.querySelector<HTMLElement>('[data-testid=ledger-slip]');
+  if (slip && decisionId !== null && slip.dataset.decision === decisionId) return slip;
+  if (decisionId !== null) {
+    const mine = (sel: string) => [...root.querySelectorAll<HTMLElement>(sel)].find((el) => el.dataset.decision === decisionId);
+    const telegram = mine('[data-testid=telegram]')?.querySelector<HTMLElement>('button');
+    if (telegram) return telegram;
+    const folder = mine('[data-testid=decision-folder]');
+    if (folder) return folder;
+  }
+  return root.querySelector<HTMLElement>('#report-title');
+}
+
+/**
  * The office: the Desk (the CEO's office at night) or, behind its tab, the Decision Room. Every
  * figure comes from the engine's selectors through the worker.
  */
@@ -29,9 +47,22 @@ export function Desk() {
   const newGame = useGame((s) => s.newGame);
   const confirming = useGame((s) => s.confirmingNewGame);
   const cancelNewGame = useGame((s) => s.cancelNewGame);
+  const roomId = useGame((s) => s.room?.decisionId ?? null);
+  const root = useRef<HTMLDivElement>(null);
+  // the room closed (decision taken, or put back in its folder): focus lands on the Desk, not on
+  // nothing. Going to the Desk by its tab keeps focus on the tab. An open carbon copy takes focus
+  // itself and hands it to its slip when put away.
+  const last = useRef({ inRoom, roomId });
+  useEffect(() => {
+    const prev = last.current;
+    last.current = { inRoom, roomId };
+    if (!prev.inRoom || inRoom || roomId !== null) return;
+    if (useGame.getState().ledgerOpen) return;
+    if (root.current) deskFocusTarget(root.current, prev.roomId)?.focus();
+  }, [inRoom, roomId]);
 
   return (
-    <div className="relative h-[900px] w-[1440px] overflow-hidden bg-desk" data-testid="desk" data-view={inRoom ? 'room' : 'desk'}>
+    <div ref={root} className="relative h-[900px] w-[1440px] overflow-hidden bg-desk" data-testid="desk" data-view={inRoom ? 'room' : 'desk'}>
       <WoodGrain />
       <DeskPlanks />
       <LampLight />

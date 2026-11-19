@@ -114,7 +114,10 @@ test('the CEO journey: telegram → Decision Room → seal → Desk and ledger �
   await expect(sheet.locator('[data-code="ledger.DecisionResolved"]')).toContainText('onaylandı');
   await expect(sheet.locator('[data-code="ledger.SupplierPriceChanged"]')).toHaveCount(1);
   await expect(sheet.locator('[data-code="ledger.PurchaseOrderPlaced"]').first()).toBeVisible();
-  await expect(sheet.getByTestId('ledger-cause').first()).toContainText('talimatınız cmd-');
+  await expect(sheet.getByTestId('ledger-cause').first()).toHaveText('← talimatınız: seçenek onayı');
+  // records are named as the CEO knows them, never by raw id
+  await expect(sheet).not.toContainText(/\b(dec|cmd|ord|po|pay|rcv|dev)-\d/);
+  await expect(sheet.locator('[data-code="ledger.DecisionResolved"]')).toContainText('No. 1 kararı');
   await page.keyboard.press('Escape');
   await expect(sheet).toHaveCount(0);
   await expect(page.getByTestId('ledger-slip-title')).toHaveText('1 numaralı karar onaylandı: Tedarikçiyle pazarlık et');
@@ -129,6 +132,59 @@ test('the CEO journey: telegram → Decision Room → seal → Desk and ledger �
   expect(decided - untouched).toBe(horizon('negotiate', 30).delta.cash);
   await expect(page.getByTestId('report-cash-value')).toHaveText(money(decided));
   await expect(page.getByTestId('report-cash-value')).not.toHaveText(money(untouched));
+});
+
+test('the seal is sent at the press: trying to leave for the Desk at once cannot drop it', async ({ page }) => {
+  await newGame(page);
+  await openSteelRoom(page);
+  await page.locator('[data-option=switch]').getByTestId('choose-option').click();
+  await page.getByTestId('approve-seal').click();
+  // while the decision is being sent the tabs wait (aria-disabled); a click on the Desk tab does nothing
+  await expect(page.getByTestId('tab-desk')).toHaveAttribute('aria-disabled', 'true');
+  await page.getByTestId('tab-desk').click({ force: true });
+  // the decision is taken all the same, and its carbon copy is on the Desk
+  await expect(scene(page)).toHaveAttribute('data-view', 'desk');
+  await expect(page.getByTestId('decision-folder')).toHaveCount(0);
+  await expect(page.getByTestId('ledger-sheet-title')).toHaveText('1 numaralı karar onaylandı: Alternatif tedarikçiye geç');
+});
+
+test('keyboard: focus lands on the options, stays on the pressed seal, and returns to the Desk', async ({ page }) => {
+  await newGame(page);
+  const tg = page.locator('[data-testid=telegram][data-code="card.supplierPriceIncrease"]');
+  await tg.getByRole('button').first().focus();
+  await page.keyboard.press('Enter');
+  await tg.getByTestId('telegram-open-room').focus();
+  await page.keyboard.press('Enter');
+  // the room opens with focus on its options, not on nothing
+  await expect(page.locator('#options-heading')).toBeFocused();
+  await page.locator('[data-option=negotiate]').getByTestId('choose-option').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-option=negotiate]')).toHaveAttribute('data-selected', 'true');
+  await page.getByTestId('approve-seal').focus();
+  await page.keyboard.press('Enter');
+  // pressed: the seal keeps focus (aria-disabled, not disabled) while the decision is sent
+  await expect(page.getByTestId('approve-seal')).toBeFocused();
+  // the room closes: the carbon copy has focus; put away, focus goes to its slip on the Desk
+  await expect(scene(page)).toHaveAttribute('data-view', 'desk');
+  await expect(page.getByTestId('ledger-sheet').getByRole('button', { name: 'Kapat' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('ledger-slip')).toBeFocused();
+});
+
+test('keyboard: a room put back from a closed decision gives focus to its carbon copy on the Desk', async ({ page }) => {
+  await newGame(page);
+  await openSteelRoom(page);
+  await page.getByTestId('tab-desk').click();
+  // the deadline passes with the room behind its tab
+  await page.getByTestId('advance-week').click();
+  await expect(page.getByTestId('calendar-day')).toHaveText('8', { timeout: 30_000 });
+  await page.getByTestId('tab-room').click();
+  await expect(page.getByTestId('room-closed')).toBeVisible();
+  await page.getByRole('button', { name: 'Masaya dön' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(scene(page)).toHaveAttribute('data-view', 'desk');
+  await expect(page.getByTestId('ledger-slip')).toHaveAttribute('data-decision', DEC);
+  await expect(page.getByTestId('ledger-slip')).toBeFocused();
 });
 
 test('reject stamps the decision and runs the default option', async ({ page }) => {
@@ -147,6 +203,8 @@ test('more analysis stays open, is ready next morning and adds the +90 column', 
   await openSteelRoom(page);
   await page.getByTestId('request-analysis').click();
   await expect(page.getByTestId('analysis-tab')).toHaveText('Analiz Gün 2 sabahı hazır');
+  // the button gives way to its tab, and focus follows it
+  await expect(page.getByTestId('analysis-tab')).toBeFocused();
   await expect(page.getByTestId('room-status')).toContainText('Gün 2 sabahı');
   await expect(scene(page)).toHaveAttribute('data-view', 'room');
   await expect(page.getByTestId('impact-horizon')).toHaveCount(6);
@@ -177,6 +235,17 @@ test('a custom decision memo is previewed by the engine and sealed', async ({ pa
   await page.getByTestId('open-memo').click();
   const memo = page.getByTestId('memo');
   await expect(memo).toBeVisible();
+  // a decimal is never read as a larger whole number ("2.5" is not 25)
+  for (const bad of ['2.5', '1,5', '0.5', '12.34.5']) {
+    await memo.getByTestId('memo-qty').fill(bad);
+    await expect(memo.getByTestId('memo-error')).toContainText('tam sayı');
+    await expect(memo.getByTestId('memo-qty-read')).toHaveCount(0);
+    await expect(memo.getByTestId('memo-preview-button')).toBeDisabled();
+  }
+  // grouped thousands are read as typed, and the reading is shown before any preview
+  await memo.getByTestId('memo-qty').fill('12.500');
+  await expect(memo.getByTestId('memo-qty-read')).toHaveText('Okunan: 12.500 birim çelik');
+  await expect(memo.getByTestId('memo-error')).toHaveCount(0);
   // a line with an out-of-range number is caught before the engine is asked
   await memo.getByTestId('memo-qty').fill('0');
   await expect(memo.getByTestId('memo-error')).toContainText('1 ile 10.000.000');

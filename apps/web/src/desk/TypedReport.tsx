@@ -65,7 +65,7 @@ export function TypedReport() {
             {t.t('ui.report.stamp')}
           </div>
         </div>
-        <h2 id="report-title" className="m-0 mt-3 font-display text-[36px] font-extrabold leading-[1.05]">
+        <h2 id="report-title" tabIndex={-1} className="m-0 mt-3 font-display text-[36px] font-extrabold leading-[1.05]">
           {t.t('ui.report.title')}
         </h2>
         <div className="mt-1.5 font-type text-label text-ink-muted" data-testid="report-dateline">

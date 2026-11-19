@@ -138,9 +138,23 @@ Integration tests assert steps 2–8 and that each option leads to a different s
   `customPreview {requestId, version, status: ready | closed | busy, preview}` carries
   `previewCustomDecision` (the engine's CommandError in `preview.impact.error`). The store shows a
   room view or memo preview only when its `version` equals the report version on the desk, so
-  figures for another day are never shown ("calculating…" until the current one arrives).
+  figures for another day are never shown ("calculating…" until the current one arrives). While
+  the Desk is in front the store sends `closeRoom` (the room stays behind its tab) and on return
+  `openRoom` again, so the room and an open memo's preview are recalculated once, not after every
+  day. Closing the memo drops its preview (`cancelPreview` drops one still queued; a newer
+  `previewCustom` also supersedes an older queued one).
+- **Seal and stamp (M3)**: the decision command is sent at the press; the seal / stamp coming down
+  (650 ms, none with reduced motion) is only drawn. When the engine has answered, the room keeps
+  its last view in front (`room.leaving`) until the press is down, then gives way to the Desk. The
+  room tabs are aria-disabled while a decision is being sent. Controls that cannot act are
+  aria-disabled rather than disabled so focus is kept (and found again after the figures are
+  recalculated); focus moves to the options on opening and to
+  the Desk (carbon copy, else the decision's telegram or folder, else the report) on closing.
 - **Ledger slip (M3)**: after every state change the worker reads the new part of the ledger for
   `DecisionResolved` and, when a newer decision closed (approved, rejected, expired, or restored
   from a save), posts `ledgerSlip`: that line and every line it caused (by command id or event
-  chain, `RngAdvanced` left out), each with its cause. The Desk keeps it as a carbon copy that opens
+  chain, `RngAdvanced` left out), each with its cause, plus the counterparty of every order and
+  purchase order it names (`parties`). The carbon copy prints no raw ids: decisions by number,
+  instructions by name, orders / purchase orders by number and customer / supplier. The Desk keeps
+  it as a carbon copy that opens
   by itself after a decision taken in the room.

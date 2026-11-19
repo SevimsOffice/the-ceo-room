@@ -76,6 +76,8 @@ export function createHandler(opts: HandlerOptions): Handler {
   let roomId: string | null = null;
   /** the last room view computed, for its version (re-posted, not recomputed, when asked again) */
   let roomCache: { version: number; decisionId: string; view: RoomView | null } | null = null;
+  /** the latest memo preview asked for: an older one still queued is not calculated */
+  let previewGen = 0;
   const ledger = createLedgerTracker();
 
   const fresh = (): Engine => createEngine(seed, { rngSeed: RNG_SEED, workspaceId: WORKSPACE_ID });
@@ -309,6 +311,9 @@ export function createHandler(opts: HandlerOptions): Handler {
       case 'closeRoom':
         roomId = null;
         return;
+      case 'cancelPreview':
+        previewGen += 1;
+        return;
       case 'previewCustom': {
         const { requestId, decisionId } = msg;
         // the caller's list is checked by the engine like a dispatch (allow-list, fields, limits)
@@ -317,8 +322,11 @@ export function createHandler(opts: HandlerOptions): Handler {
           post({ type: 'customPreview', requestId, decisionId, version, status: 'busy', preview: null });
           return;
         }
+        previewGen += 1;
+        const gen = previewGen;
         later(() => {
-          if (!engine) return;
+          // superseded by a newer preview, or the memo was put away
+          if (!engine || gen !== previewGen) return;
           if (busy) {
             post({ type: 'customPreview', requestId, decisionId, version, status: 'busy', preview: null });
             return;

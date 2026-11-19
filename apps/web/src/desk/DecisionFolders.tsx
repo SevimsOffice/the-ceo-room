@@ -54,6 +54,7 @@ export function DecisionFolders() {
               className="press absolute block h-[150px] w-[276px] cursor-pointer border-0 bg-transparent p-0 text-left transition-transform hover:-translate-y-1"
               style={{ left: i % 2 === 0 ? 0 : 8, top: i * step, transform: `rotate(${TILT[i % TILT.length]}deg)`, zIndex: i + 1 }}
               data-testid="decision-folder"
+              data-decision={d.id}
             >
               <span className="absolute left-[18px] top-[-21px] h-[22px] w-32 rounded-t-md" style={{ background: c.bg }} aria-hidden="true" />
               <span

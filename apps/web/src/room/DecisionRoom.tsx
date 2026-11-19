@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import type { AdvisorBrief } from '@ceo-room/engine';
 import { useT } from '../i18n';
 import { canDecide, currentRoomView, useGame } from '../store/game';
@@ -57,7 +57,7 @@ function SituationMemo({ v }: { v: RoomView }) {
         </p>
         {v.status === 'open' && (
           <p className="m-0 mt-2 font-type text-label font-bold leading-snug" style={{ color: urgent ? '#8a1818' : '#4a3a28' }} data-testid="room-deadline">
-            {daysLeftText(t, v.daysLeft)} · {t.t('ui.room.deadline', { day: v.deadlineDay })}
+            {t.t('ui.room.deadlineLine', { left: daysLeftText(t, v.daysLeft), deadline: t.t('ui.room.deadline', { day: v.deadlineDay }) })}
           </p>
         )}
         <dl className="m-0 mt-1">
@@ -114,9 +114,7 @@ function BaselineCard({ v }: { v: RoomView }) {
               <th key={m} scope="col" className="p-0 text-right font-normal leading-tight">
                 <span className="block font-bold" aria-hidden="true">{t.t(`ui.room.short.${m}`)}</span>
                 <span className="block text-[#d5dfc9]" aria-hidden="true">{baselineUnit(t, m)}</span>
-                <span className="sr-only">
-                  {metricLabel(t, m).label} ({baselineUnit(t, m)})
-                </span>
+                <span className="sr-only">{t.t('ui.room.withNote', { text: metricLabel(t, m).label, note: baselineUnit(t, m) })}</span>
               </th>
             ))}
           </tr>
@@ -127,8 +125,8 @@ function BaselineCard({ v }: { v: RoomView }) {
             return (
               <tr key={b.horizonDays} className="grid items-baseline gap-x-2 border-b border-dotted border-[rgba(220,230,210,.35)] py-[2px]" style={{ gridTemplateColumns: cols }} data-testid="baseline-row">
                 <th scope="row" className="p-0 text-left font-bold">
-                  {head.title}
-                  <span className="sr-only"> ({head.day})</span>
+                  <span aria-hidden="true">{head.title}</span>
+                  <span className="sr-only">{t.t('ui.room.withNote', { text: head.title, note: head.day })}</span>
                 </th>
                 {METRICS.map((m) => {
                   const c = baselineCell(t, m, b.kpis);
@@ -238,7 +236,7 @@ function AdvisorLetter({ v, brief, index }: { v: RoomView; brief: AdvisorBrief; 
             {role}
           </span>
           <h3 id={`advisor-${brief.role}`} className="m-0 font-display text-[16px] font-bold leading-tight">
-            {t.t(brief.titleKey)} ({role})
+            {t.t('ui.room.advisor.title', { title: t.t(brief.titleKey), role })}
           </h3>
         </div>
         <p className="m-0 mt-2 font-type text-label font-bold leading-snug text-oxblood" data-testid="advisor-recommends">
@@ -257,7 +255,7 @@ function AdvisorLetter({ v, brief, index }: { v: RoomView; brief: AdvisorBrief; 
           </ul>
         )}
         <p className="m-0 mt-2 text-right font-hand text-[19px] font-semibold italic text-ink" data-testid="advisor-signature">
-          — {brief.advisorName}, {role}
+          {t.t('ui.room.advisor.signature', { name: brief.advisorName, role })}
         </p>
       </div>
     </article>
@@ -271,6 +269,22 @@ function RoomNote({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+/** A focused control by what it is (test id, option), not by node: nodes are rebuilt. */
+type FocusKey = { testId: string; option: string | null };
+
+function focusKey(el: HTMLElement): FocusKey | null {
+  const testId = el.getAttribute('data-testid');
+  return testId ? { testId, option: el.closest('[data-option]')?.getAttribute('data-option') ?? null } : null;
+}
+
+/** The control a key names now; the analysis button is replaced by its tab once requested. */
+function findFocus(k: FocusKey | null): HTMLElement | null {
+  if (!k) return null;
+  const scope = k.option ? document.querySelector(`[data-option="${k.option}"]`) : document;
+  const q = (id: string) => scope?.querySelector<HTMLElement>(`[data-testid="${id}"]`) ?? null;
+  return q(k.testId) ?? (k.testId === 'request-analysis' ? q('analysis-tab') : null);
 }
 
 /**
@@ -287,6 +301,30 @@ export function DecisionRoom() {
   const missing = useGame((s) => s.room?.view?.version === s.version && s.room.view.data === null);
   const closeRoom = useGame((s) => s.closeRoom);
   const [stamp, setStamp] = useState<Stamp>(null);
+  const optionsHeading = useRef<HTMLHeadingElement>(null);
+  const shown = v !== null && v.status === 'open';
+  // the control last focused in the room, to find it again after the figures were recalculated
+  const lastFocus = useRef<FocusKey | null>(null);
+  useEffect(() => {
+    const on = (e: FocusEvent) => {
+      if (e.target instanceof HTMLElement) lastFocus.current = focusKey(e.target);
+    };
+    document.addEventListener('focusin', on);
+    return () => document.removeEventListener('focusin', on);
+  }, []);
+  // on opening, focus moves to the options (once the figures are in); the opener is gone with the
+  // Desk. While the figures are recalculated (after a day or an instruction) the room's controls
+  // are briefly gone: focus comes back to the same control (or what replaced it) when they return.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (!shown) return;
+    const first = !opened.current;
+    opened.current = true;
+    const active = document.activeElement;
+    if (!first && active !== null && active !== document.body) return;
+    if (!first) findFocus(lastFocus.current)?.focus();
+    if (first || document.activeElement === null || document.activeElement === document.body) optionsHeading.current?.focus();
+  }, [shown]);
   if (!room) return null;
 
   if (!v) {
@@ -326,7 +364,7 @@ export function DecisionRoom() {
 
       <section aria-labelledby="options-heading" className="absolute left-[296px] top-[84px] z-10 w-[834px]" data-testid="room-options">
         <div className="flex items-baseline justify-between gap-4">
-          <h2 id="options-heading" className="m-0 font-display text-[26px] font-medium italic leading-tight text-cream-2">
+          <h2 id="options-heading" ref={optionsHeading} tabIndex={-1} className="m-0 font-display text-[26px] font-medium italic leading-tight text-cream-2">
             {t.plural('ui.room.options.heading', onTable.length)}
           </h2>
         </div>

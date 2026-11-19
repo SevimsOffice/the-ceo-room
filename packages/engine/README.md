@@ -46,7 +46,8 @@ Pure building blocks (same code paths): `applyCommand(state, cmd)`, `advanceStat
 
 Invalid commands (unknown type, missing or extra field, non-integer or out-of-range number) return
 a typed error and change nothing. `COMMAND_LIMITS` (exported) gives the bounds on CEO-supplied
-numbers (purchase quantity, discount); pass-through is 0–10000 bps. Committed state, ledger events and memoised read models are
+numbers (`maxPurchaseQty`, `maxUnitPrice`, `maxDiscountBps`, `maxPassThroughBps` = 10000 bps, i.e.
+the whole cost rise); the shape check reads them from there and the Decision Room's memo is given them. Committed state, ledger events and memoised read models are
 deep-frozen.
 
 ### Selectors

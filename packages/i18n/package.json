@@ -1,0 +1,16 @@
+{
+  "name": "@ceo-room/i18n",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p . && tsc --noEmit -p tsconfig.test.json"
+  },
+  "devDependencies": {
+    "@ceo-room/engine": "workspace:*",
+    "@ceo-room/seed-data": "workspace:*"
+  }
+}

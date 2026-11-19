@@ -7,8 +7,12 @@
     "node": ">=22"
   },
   "scripts": {
+    "dev": "pnpm --filter @ceo-room/web dev",
+    "build": "pnpm --filter @ceo-room/web build",
+    "preview": "pnpm --filter @ceo-room/web preview",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck && tsc --noEmit -p scripts",
+    "e2e": "pnpm --filter @ceo-room/web e2e",
     "seed": "tsx scripts/generate-seed.ts"
   },
   "devDependencies": {

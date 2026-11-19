@@ -2,9 +2,11 @@
  * The engine worker's message handler, as a plain module: no Worker, no DOM, no storage. The
  * worker entry (engine.worker.ts) wires it to `self`; tests call `handle()` directly.
  *
- * Order of messages after a state change: report → save → (later, once nothing else is queued)
- * runway. The report is shown at once with the runway "calculating…"; the 180-day runway
- * projection follows in its own message.
+ * Order of messages after a state change: report → save → ledgerSlip (when a decision closed) →
+ * (later, once nothing else is queued and no advance runs) runway → room. The report is shown at
+ * once with the runway "calculating…"; the 180-day runway projection and the Decision Room (forward
+ * runs of every option) follow in their own messages, tagged with the report version they belong
+ * to. During a multi-day advance neither is computed; both follow once the advance ends.
  */
 import {
   type Engine,
@@ -12,6 +14,7 @@ import {
   type SeedBundle,
   createEngine,
   fromSnapshot,
+  previewCustomDecision,
   selectDecisionSummary,
   selectMorningReport,
   selectOrderBook,
@@ -21,7 +24,8 @@ import {
   tuning,
 } from '@ceo-room/engine';
 import { buildDirectory } from './directory';
-import type { DossierView, StoredSave, WorkerRequest, WorkerResponse } from './protocol';
+import type { DossierView, RoomView, StoredSave, WorkerRequest, WorkerResponse } from './protocol';
+import { createLedgerTracker, roomView } from './room';
 
 /** One fixed simulation per browser (V1): the seed's NOVARA with this RNG seed and workspace. */
 export const RNG_SEED = 42;
@@ -68,6 +72,11 @@ export function createHandler(opts: HandlerOptions): Handler {
   let busy = false;
   let stopRequested = false;
   let background: Promise<void> = Promise.resolve();
+  /** the decision open in the Decision Room (its view follows every state change) */
+  let roomId: string | null = null;
+  /** the last room view computed, for its version (re-posted, not recomputed, when asked again) */
+  let roomCache: { version: number; decisionId: string; view: RoomView | null } | null = null;
+  const ledger = createLedgerTracker();
 
   const fresh = (): Engine => createEngine(seed, { rngSeed: RNG_SEED, workspaceId: WORKSPACE_ID });
 
@@ -76,6 +85,35 @@ export function createHandler(opts: HandlerOptions): Handler {
     version += 1;
     post({ type: 'report', version, report: selectMorningReport(e.state(), { includeRunway: false }) });
     post({ type: 'save', save: storedSave(e) });
+    const slip = ledger.update(e);
+    if (slip !== undefined) post({ type: 'ledgerSlip', slip });
+  };
+
+  /** Run `job` in the background once nothing newer is pending (posts `fatal` if it throws). */
+  const later = (job: () => void): void => {
+    background = background
+      .then(async () => {
+        await sleep(0);
+        job();
+      })
+      .catch((err: unknown) => post({ type: 'fatal', error: fatalError(err) }));
+  };
+
+  /**
+   * Compute and post the Decision Room for the current version, unless the state moves on first or
+   * an advance is running (the room follows when it ends). Memoised per version and decision.
+   */
+  const scheduleRoom = (): void => {
+    const v = version;
+    const id = roomId;
+    if (!id) return;
+    later(() => {
+      if (v !== version || busy || !engine || roomId !== id) return;
+      if (!roomCache || roomCache.version !== v || roomCache.decisionId !== id) {
+        roomCache = { version: v, decisionId: id, view: roomView(engine, id) };
+      }
+      post({ type: 'room', decisionId: id, version: v, view: roomCache.view });
+    });
   };
 
   /** Compute the runway (and the health score that needs it) once nothing newer is pending. */
@@ -112,8 +150,17 @@ export function createHandler(opts: HandlerOptions): Handler {
     return r;
   };
 
+  /** The background reads that follow a state change: runway first, then the open room. */
+  const afterChange = (): void => {
+    scheduleRunway();
+    scheduleRoom();
+  };
+
   const start = (save: StoredSave | null, unreadable = false): void => {
     let restored = false;
+    roomId = null;
+    roomCache = null;
+    ledger.reset();
     let restoreError: Msg | null = unreadable ? { code: 'ui.error.saveUnreadable', params: {} } : null;
     engine = null;
     if (save) {
@@ -141,7 +188,7 @@ export function createHandler(opts: HandlerOptions): Handler {
       restoreError,
     });
     publish(engine);
-    scheduleRunway();
+    afterChange();
   };
 
   const advance = async (e: Engine, days: number): Promise<void> => {
@@ -167,7 +214,7 @@ export function createHandler(opts: HandlerOptions): Handler {
       stopRequested = false;
       post({ type: 'busy', busy: null, interrupted });
     }
-    scheduleRunway();
+    afterChange();
   };
 
   const dossier = (e: Engine, decisionId: string): DossierView | null => {
@@ -241,7 +288,7 @@ export function createHandler(opts: HandlerOptions): Handler {
         if (r.ok) {
           post({ type: 'dispatched', ok: true, command: msg.command });
           publish(e);
-          scheduleRunway();
+          afterChange();
         } else {
           post({ type: 'dispatched', ok: false, command: msg.command, error: r.error });
         }
@@ -255,6 +302,32 @@ export function createHandler(opts: HandlerOptions): Handler {
       case 'openOrderBook':
         post({ type: 'orderBook', book: selectOrderBook(e.state()) });
         return;
+      case 'openRoom':
+        roomId = msg.decisionId;
+        scheduleRoom();
+        return;
+      case 'closeRoom':
+        roomId = null;
+        return;
+      case 'previewCustom': {
+        const { requestId, decisionId } = msg;
+        // the caller's list is checked by the engine like a dispatch (allow-list, fields, limits)
+        const commands = Array.isArray(msg.commands) ? msg.commands : [];
+        if (busy) {
+          post({ type: 'customPreview', requestId, decisionId, version, status: 'busy', preview: null });
+          return;
+        }
+        later(() => {
+          if (!engine) return;
+          if (busy) {
+            post({ type: 'customPreview', requestId, decisionId, version, status: 'busy', preview: null });
+            return;
+          }
+          const preview = previewCustomDecision(engine.state(), decisionId, commands);
+          post({ type: 'customPreview', requestId, decisionId, version, status: preview ? 'ready' : 'closed', preview });
+        });
+        return;
+      }
     }
   }
 }

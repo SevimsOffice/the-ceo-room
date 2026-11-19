@@ -2,9 +2,9 @@ import type { CompanyState } from '../model/types';
 import type { Bps, Money, Score, SimDay } from '../model/units';
 import { money } from '../model/units';
 import { deepFreeze } from '../model/freeze';
-import type { CommandError } from '../commands/types';
+import type { CeoCommand, Command, CommandError } from '../commands/types';
 import type { RiskLevel } from '../rules/risk';
-import { type KpiSnapshot, projectState } from './project';
+import { type KpiSnapshot, type Projection, projectState } from './project';
 import { DECISION_HORIZONS } from '../config/tuning';
 
 export interface ImpactDelta {
@@ -104,6 +104,54 @@ export function payablesDue(base: CompanyState, opt: CompanyState, from: SimDay,
 }
 
 const cache = new WeakMap<CompanyState, Map<string, DecisionImpacts>>();
+const baselineCache = new WeakMap<CompanyState, Map<string, Projection>>();
+
+/**
+ * The baseline run (no new command: open decisions stay open and expire to their defaults) to the
+ * last horizon, with a checkpoint at each one. Memoised per state object and horizon list, so the
+ * Decision Room's options and any custom-decision preview share one baseline run.
+ */
+function baselineRun(state: CompanyState, horizons: readonly number[]): Projection | null {
+  const key = horizons.join(',');
+  const perState = baselineCache.get(state) ?? new Map<string, Projection>();
+  const hit = perState.get(key);
+  if (hit) return hit;
+  const base = projectState(state, [], Math.max(...horizons), horizons);
+  if (!base.ok) return null;
+  perState.set(key, base);
+  baselineCache.set(state, perState);
+  return base;
+}
+
+const kpisAt = (p: Projection, h: number): KpiSnapshot => {
+  const c = p.checkpoints.find((x) => x.days === h);
+  if (!c) throw new Error(`missing checkpoint ${h}`);
+  return c.kpis;
+};
+
+/** One course of action (a command list) against the baseline, at each horizon. */
+function impactOf(state: CompanyState, base: Projection, optionId: string, cmds: readonly Command[], horizons: readonly number[]): OptionImpact {
+  const p = projectState(state, cmds, Math.max(...horizons), horizons);
+  if (!p.ok) return { optionId, horizons: [], error: p.error };
+  return {
+    optionId,
+    error: null,
+    horizons: horizons.map((h) => {
+      const b = kpisAt(base, h);
+      const c = p.checkpoints.find((x) => x.days === h);
+      const k = c ? c.kpis : b;
+      const prev = Math.max(0, ...horizons.filter((x) => x < h));
+      return {
+        horizonDays: h,
+        baseline: b,
+        option: k,
+        delta: deltaOf(b, k),
+        risk: { baseline: b.riskLevel, option: k.riskLevel },
+        payablesDue: payablesDue(base.state, p.state, state.day + prev, state.day + h - 1),
+      };
+    }),
+  };
+}
 
 /**
  * Impact preview: each option = project([approveOption], H) vs baseline project([], H), using the
@@ -116,44 +164,53 @@ export function decisionImpacts(state: CompanyState, decisionId: string, horizon
   if (hit) return hit;
   const d = state.decisions.find((x) => x.id === decisionId);
   if (!d) return null;
-  const max = Math.max(...horizons);
-  const base = projectState(state, [], max, horizons);
-  if (!base.ok) return null;
-  const baseAt = (h: number): KpiSnapshot => {
-    const c = base.checkpoints.find((x) => x.days === h);
-    if (!c) throw new Error(`missing checkpoint ${h}`);
-    return c.kpis;
-  };
-  const options: OptionImpact[] = d.options.map((o) => {
-    const p = projectState(state, [{ type: 'approveOption', decisionId, optionId: o.id }], max, horizons);
-    if (!p.ok) return { optionId: o.id, horizons: [], error: p.error };
-    return {
-      optionId: o.id,
-      error: null,
-      horizons: horizons.map((h) => {
-        const b = baseAt(h);
-        const c = p.checkpoints.find((x) => x.days === h);
-        const k = c ? c.kpis : b;
-        const prev = Math.max(0, ...horizons.filter((x) => x < h));
-        return {
-          horizonDays: h,
-          baseline: b,
-          option: k,
-          delta: deltaOf(b, k),
-          risk: { baseline: b.riskLevel, option: k.riskLevel },
-          payablesDue: payablesDue(base.state, p.state, state.day + prev, state.day + h - 1),
-        };
-      }),
-    };
-  });
+  const base = baselineRun(state, horizons);
+  if (!base) return null;
+  const options: OptionImpact[] = d.options.map((o) => impactOf(state, base, o.id, [{ type: 'approveOption', decisionId, optionId: o.id }], horizons));
   const result: DecisionImpacts = {
     decisionId,
     horizons: [...horizons],
-    baseline: horizons.map((h) => ({ horizonDays: h, kpis: baseAt(h) })),
+    baseline: horizons.map((h) => ({ horizonDays: h, kpis: kpisAt(base, h) })),
     options,
   };
   // Cached and shared between callers: frozen so no caller can alter what the next one reads.
   perState.set(key, deepFreeze(result));
   cache.set(state, perState);
   return result;
+}
+
+/** A custom decision's preview: the same impact shape as an option of the Decision Room. */
+export interface CustomDecisionPreview {
+  decisionId: string;
+  horizons: number[];
+  baseline: { horizonDays: number; kpis: KpiSnapshot }[];
+  /** `optionId` is 'custom'; `error` is the engine's CommandError when the memo is refused */
+  impact: OptionImpact;
+}
+
+/**
+ * Preview a custom decision on an open decision: project([customDecision {decisionId, commands}], H)
+ * against the same baseline as the options (ADR-0002: the real command path, on a copy). The
+ * commands are checked exactly as on dispatch (allow-list, fields, limits, the decision's basis);
+ * a refusal comes back as `impact.error`. Null when the decision is unknown or already closed.
+ * Not memoised (each memo is new); the baseline run is shared with decisionImpacts.
+ */
+export function previewCustomDecision(
+  state: CompanyState,
+  decisionId: string,
+  commands: readonly CeoCommand[],
+  horizons: readonly number[] = DECISION_HORIZONS,
+): CustomDecisionPreview | null {
+  const d = state.decisions.find((x) => x.id === decisionId);
+  if (!d || d.status !== 'open') return null;
+  const base = baselineRun(state, horizons);
+  if (!base) return null;
+  // the caller's list is copied: the preview never keeps or alters what it was given
+  const cmd: Command = { type: 'customDecision', decisionId, commands: JSON.parse(JSON.stringify(commands)) as CeoCommand[] };
+  return deepFreeze({
+    decisionId,
+    horizons: [...horizons],
+    baseline: horizons.map((h) => ({ horizonDays: h, kpis: kpisAt(base, h) })),
+    impact: impactOf(state, base, 'custom', [cmd], horizons),
+  });
 }

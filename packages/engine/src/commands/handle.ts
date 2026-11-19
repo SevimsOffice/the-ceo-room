@@ -167,7 +167,7 @@ function executeOperational(tx: Tx, c: OperationalCommand, d: Decision | null, c
             'CustomerTermsChanged',
             { customerId: cust.id, paymentDelayDays: cust.paymentDelayDays + reaction.paymentDelayDays, discountBps: cust.discountBps },
             fromEvent(ev),
-            { customerId: cust.id, paymentDelayDays: cust.paymentDelayDays + reaction.paymentDelayDays },
+            { customerId: cust.id, paymentDelayDays: cust.paymentDelayDays + reaction.paymentDelayDays, discountBps: cust.discountBps },
           );
         }
       }
@@ -180,7 +180,7 @@ function executeOperational(tx: Tx, c: OperationalCommand, d: Decision | null, c
         'CustomerTermsChanged',
         { customerId: cust.id, paymentDelayDays: cust.paymentDelayDays, discountBps: c.discountBps },
         cause,
-        { customerId: cust.id, discountBps: c.discountBps },
+        { customerId: cust.id, paymentDelayDays: cust.paymentDelayDays, discountBps: c.discountBps },
       );
       // Reprice from the pre-discount price at the new rate (same rule as new orders in systems/demand.ts).
       for (const o of openOrders(s).filter((x) => x.customerId === cust.id)) {

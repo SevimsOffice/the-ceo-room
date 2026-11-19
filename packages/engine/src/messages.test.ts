@@ -217,6 +217,15 @@ describe('listMessageCodes', () => {
       ...new Set(found.flatMap((f) => f.params.filter((p) => !(byCode.get(f.code)?.params ?? []).includes(p)).map((p) => `${f.code}.${p} (${f.where})`))),
     ];
     expect(badParams).toEqual([]);
+    // every ledger entry supplies every param its message needs (a missing one prints a blank, e.g. "indirim .")
+    const missingParams = [
+      ...new Set(
+        found
+          .filter((f) => /^ledger \w+$/.test(f.where))
+          .flatMap((f) => (byCode.get(f.code)?.params ?? []).filter((p) => !f.params.includes(p)).map((p) => `${f.code}.${p} (${f.where})`)),
+      ),
+    ];
+    expect(missingParams).toEqual([]);
 
     // and the runs reach most of the catalogue: every error, reason, ledger type the seed can produce
     const seen = new Set(found.map((f) => f.code));

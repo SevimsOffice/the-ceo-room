@@ -11,7 +11,7 @@ export const en: Readonly<Record<string, string>> = {
   'card.largeOrder':
     'Large order from {customerId:customer}: {qty:int} {familyId:family}, {value:money}, wanted by {requestedDay:day}, paid {paymentTermsDays:days} after delivery.',
   'card.supplierPriceIncrease': '{supplierId:supplier} raises the {materialId:material} price by {changeBps:bps}.',
-  'card.discountDemand': '{customerId:customer} demands a {discountBps:bps} discount on its open orders.',
+  'card.discountDemand': '{customerId:customer} demands a discount of {discountBps:bps} on its open orders.',
   'card.machineBreakdown': 'The {lineId:line} has broken down. Repair will take {repairDays:days}.',
   'card.latePayment': '{customerId:customer} will pay {delayDays:days} late.',
   'card.exportOpportunity': 'A buyer abroad asks for a quotation. An export opening, if we can make room.',
@@ -22,7 +22,7 @@ export const en: Readonly<Record<string, string>> = {
   'decision.supplierPrice.situation':
     '{supplierId:supplier} raises the price of {materialId:material} by {changeBps:bps}, from {previousPrice:price} to {newPrice:price} a unit.',
   'decision.discountDemand.situation':
-    '{customerId:customer} asks for a {discountBps:bps} discount on its open orders and hints it may take its business elsewhere.',
+    '{customerId:customer} asks for a discount of {discountBps:bps} on its open orders and hints it may take its business elsewhere.',
   'option.supplierPrice.absorb': 'Absorb the increase',
   'option.supplierPrice.negotiate': 'Negotiate with the supplier',
   'option.supplierPrice.switch': 'Switch to the alternative supplier',
@@ -35,13 +35,13 @@ export const en: Readonly<Record<string, string>> = {
   'assumption.volumeCommitment': 'In return we commit to buying {qty:int} units of {materialId:material} from {supplierId:supplier}.',
   'assumption.normalPaymentTerms': '{supplierId:supplier} is paid on normal terms, {days:days} after delivery.',
   'assumption.alternativePrice': '{supplierId:supplier} quotes {unitPrice:price} a unit.',
-  'assumption.depositUpFront': '{supplierId:supplier} wants a {depositBps:bps} deposit up front and the balance within {days:days}.',
+  'assumption.depositUpFront': '{supplierId:supplier} wants a deposit of {depositBps:bps} up front and the balance within {days:days}.',
   'assumption.firstLeadTime': 'The first delivery from {supplierId:supplier} takes {leadTimeDays:days}, after {onboardingDays:days} of onboarding.',
   'assumption.reliability': '{supplierId:supplier} delivers on time {reliabilityBps:bps} of the time.',
   'assumption.fullPassThrough': 'The whole {materialId:material} increase is passed on to open orders.',
   'assumption.customerReaction':
     'Customers react: satisfaction {satisfactionDelta:scoreDelta}, churn risk {churnRiskDelta:bpsPoints}, payments {paymentDelayDays:days} later.',
-  'assumption.discountOnOpenOrders': 'A {discountBps:bps} discount applies to the customer’s open orders.',
+  'assumption.discountOnOpenOrders': 'A discount of {discountBps:bps} applies to the customer’s open orders.',
   'assumption.advisor.expectedPath': 'Figures follow the expected course of the simulation; nothing unforeseen is assumed.',
   'assumption.advisor.cfoHorizon': 'Cash is judged at {horizonDays:days} and at {deepHorizonDays:days}; the worse of the two counts.',
   'assumption.advisor.cooScope': 'Operations looks at {materialId:material} supply and delivery dates only.',

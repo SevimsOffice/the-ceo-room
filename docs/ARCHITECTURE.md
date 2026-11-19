@@ -28,8 +28,8 @@ can mutate state.
 | Package | Responsibility | Depends on |
 |---|---|---|
 | `packages/engine` | Domain model, systems, commands, events, rules, projections, selectors, RNG | nothing (no DOM, no React, no LLM, no I/O) |
-| `packages/i18n` | `tr`/`en` catalogues, `formatMoney`, `formatPercent`, `formatDays` (locale-aware) | none |
-| `apps/web` | Rooms, physical-object components, Zustand store, localStorage save | engine, i18n |
+| `packages/i18n` | `tr`/`en` catalogues (every engine code + `ui.*`), `createTranslator` (`{param:format}` placeholders, id → name directory), formatters from engine units (`formatMoney`, `formatBps`, `formatScoreDelta`, `formatDays`, …) | none (tests use engine + seed-data) |
+| `apps/web` | Rooms, physical-object components, Zustand store, engine Web Worker, localStorage save | engine (worker; types only on the main thread), i18n |
 | `scripts/` | `generate-seed.ts` (fixed seed → `data/seed/*.json`) | engine types |
 
 Monorepo via pnpm workspaces (ADR-0003). TypeScript strict across all packages.
@@ -111,3 +111,11 @@ Integration tests assert steps 2–8 and that each option leads to a different s
 - **Currency**: engine stores kuruş in the company's currency (TRY). Display currency and
   formatting live in `packages/i18n`.
 - **Errors**: invalid commands return typed errors; engine never throws on user input.
+- **Engine in a Web Worker (M2)**: `apps/web/src/worker/handler.ts` is a pure message handler
+  (unit-tested without a Worker) wired to `self` by `engine.worker.ts`. Requests: `init {save}`,
+  `newGame`, `dispatch {command}`, `advance {days}` (one day at a time, a report after each),
+  `stop`, `openDecision`, `openOrderBook`. After every state change the worker posts `report`
+  (`selectMorningReport(…, { includeRunway: false })`) and `save` (the snapshot, stored by the main
+  thread in localStorage); the 180-day `runway` + overall health follow in a separate message once
+  nothing newer is pending, so the report shows "calculating…" first. State changes are rejected
+  while an advance runs; `stop` interrupts it after the current day.

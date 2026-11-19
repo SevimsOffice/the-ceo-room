@@ -29,7 +29,9 @@ export function Sheet({
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     const el = ref.current;
-    el?.querySelector<HTMLElement>('[data-autofocus]')?.focus() ?? el?.focus();
+    const first = el?.querySelector<HTMLElement>('[data-autofocus]');
+    if (first) first.focus();
+    else el?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();

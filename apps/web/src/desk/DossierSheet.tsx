@@ -3,7 +3,7 @@ import { formatBps, formatInt } from '@ceo-room/i18n';
 import { useT } from '../i18n';
 import { useGame } from '../store/game';
 import { Sheet } from './Sheet';
-import { daysLeftText } from './figures';
+import { daysLeftText, decisionNumber } from './figures';
 
 /** How each supporting figure (selectDecision) is printed. */
 function figureText(t: Translator, code: string, value: number): string {
@@ -28,7 +28,7 @@ export function DossierSheet() {
   const close = useGame((s) => s.closeDossier);
   if (!dossier) return null;
   const v = dossier.view;
-  const n = Number(/(\d+)$/.exec(dossier.decisionId)?.[1] ?? 0);
+  const n = decisionNumber(dossier.decisionId);
 
   return (
     <Sheet title={t.t('ui.dossier.heading', { n })} onClose={close} width={760} testId="dossier">

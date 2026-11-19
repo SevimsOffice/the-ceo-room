@@ -1,0 +1,53 @@
+# Build, test and publish the Desk to GitHub Pages: https://sevimsoffice.github.io/the-ceo-room/
+name: Pages
+
+on:
+  push:
+    branches: [main, claude/sharp-albattani-b3jp4r]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Install Chromium for the e2e journey
+        run: pnpm --filter @ceo-room/web exec playwright install --with-deps chromium
+      - name: E2E (Playwright, built site)
+        run: pnpm --filter @ceo-room/web exec playwright test --trace off
+        env:
+          CI: 'true'
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

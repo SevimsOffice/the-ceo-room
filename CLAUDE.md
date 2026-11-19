@@ -4,7 +4,7 @@ Source of truth: `CEO_ROOM_CLAUDE_CODE_PROMPT.md` (product spec). Visual referen
 Architecture and model: `docs/`. Decisions: `docs/adr/`. When these disagree, the spec wins
 unless an accepted ADR says otherwise.
 
-**Current phase:** Milestone 1 done, awaiting approval before Milestone 2 (The Desk UI). Phase 0 approved; decisions in `docs/OPEN_QUESTIONS.md`.
+**Current phase:** Milestone 2 (The Desk UI) done, awaiting approval before Milestone 3 (Decision Room). Phase 0 approved; decisions in `docs/OPEN_QUESTIONS.md`.
 
 ## Principles (non-negotiable)
 
@@ -31,7 +31,7 @@ unless an accepted ADR says otherwise.
   with a `cause` (the command, rule or event that produced it).
 - Same seed + same commands = byte-identical state. A test enforces this.
 
-## Repository layout (planned)
+## Repository layout
 
 ```
 CEO_ROOM_CLAUDE_CODE_PROMPT.md   product spec (source of truth)
@@ -41,22 +41,27 @@ docs/                            ARCHITECTURE, DOMAIN_MODEL, SIMULATION_DESIGN, 
 data/seed/*.json                 static seed (generated once by scripts/generate-seed.ts, fixed seed)
 packages/engine/                 pure simulation (no React, no LLM, no DOM)
 packages/i18n/                   tr/en message catalogues + number/currency formatting
-apps/web/                        React + Vite + Tailwind + Zustand UI
+packages/seed-data/              loads and validates data/seed (SeedDataSource)
+apps/web/                        React + Vite + Tailwind + Zustand UI; engine in a Web Worker
 scripts/                         seed generator, tooling
 .claude/agents/                  simulation-engineer, test-writer, code-reviewer
 ```
 
-## Commands (will exist after Milestone 1; pnpm workspaces)
+## Commands (pnpm workspaces)
 
 ```
 pnpm install
-pnpm test               # vitest, all packages
-pnpm --filter engine test
+pnpm test               # vitest, all packages (engine, seed-data, i18n, web)
+pnpm --filter @ceo-room/engine test
+pnpm typecheck          # tsc, all packages + scripts
 pnpm seed               # regenerate data/seed (only when the seed design changes)
-pnpm dev                # web app
-pnpm e2e                # playwright, main CEO journey
-pnpm lint && pnpm typecheck
+pnpm dev                # web app (Vite) at http://localhost:5173/the-ceo-room/
+pnpm build              # apps/web/dist (GitHub Pages, base /the-ceo-room/)
+pnpm e2e                # build + Playwright (Chromium), main CEO journey
 ```
+
+Deploy: `.github/workflows/pages.yml` (typecheck, test, build, e2e, Pages) →
+https://sevimsoffice.github.io/the-ceo-room/
 
 ## Conventions
 

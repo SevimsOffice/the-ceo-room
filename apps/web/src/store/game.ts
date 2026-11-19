@@ -45,6 +45,7 @@ export interface GameState {
   closeOrderBook(): void;
   newGame(): void;
   markTelegramsSeen(ids: string[]): void;
+  dismissNotice(): void;
   receive(msg: WorkerResponse): void;
 }
 
@@ -130,6 +131,8 @@ export const useGame = create<GameState>()((set, get) => ({
     storeSave(null);
     transport.send({ type: 'newGame' });
   },
+
+  dismissNotice: () => set({ notice: null }),
 
   markTelegramsSeen(ids) {
     const seen = get().seenTelegrams;

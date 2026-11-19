@@ -4,7 +4,7 @@ Source of truth: `CEO_ROOM_CLAUDE_CODE_PROMPT.md` (product spec). Visual referen
 Architecture and model: `docs/`. Decisions: `docs/adr/`. When these disagree, the spec wins
 unless an accepted ADR says otherwise.
 
-**Current phase:** Milestone 3 (Decision Room) done, awaiting approval before Milestone 4. Milestones 0–2 approved; Phase 0 decisions in `docs/OPEN_QUESTIONS.md`.
+**Current phase:** Milestone 4a (Archive Room v1: Excel import in the browser). Milestones 0–3 approved; Phase 0 decisions in `docs/OPEN_QUESTIONS.md`.
 
 ## Principles (non-negotiable)
 

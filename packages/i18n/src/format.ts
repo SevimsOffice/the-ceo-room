@@ -129,20 +129,16 @@ export function formatSignedMoney(kurus: number, locale: Locale, currency = 'TRY
 
 // ---- Percentages (basis points) ------------------------------------------------------------
 
-/** Decimals for a percentage: whole percents print without decimals, others with one. */
-function pctDecimals(bps: number, decimals: number | 'auto'): number {
-  if (decimals !== 'auto') return decimals;
-  return Math.round(bps) % 100 === 0 ? 0 : 1;
-}
-
 function pct(body: string, locale: Locale): string {
   return locale === 'tr' ? `%${body}` : `${body}%`;
 }
 
-/** 9180 bps → "%92" (tr) / "92%" (en); `decimals` default 0, or 'auto'. Negative: "−%5" / "−5%". */
+/**
+ * 9180 bps → "%92" (tr) / "92%" (en). `decimals` default 0; 'auto' = one decimal with a trailing
+ * zero dropped (596 → "%6", 151 → "%1,5"). Negative: "−%5" / "−5%".
+ */
 export function formatBps(bps: number, locale: Locale, decimals: number | 'auto' = 0): string {
-  const d = pctDecimals(bps, decimals);
-  const body = formatDecimal(Math.abs(bps) / 100, locale, d);
+  const body = decimals === 'auto' ? formatDecimal(Math.abs(bps) / 100, locale, 1, true) : formatDecimal(Math.abs(bps) / 100, locale, decimals);
   const neg = bps < 0 && body.replace(/[^1-9]/g, '') !== '';
   return (neg ? MINUS : '') + pct(body, locale);
 }

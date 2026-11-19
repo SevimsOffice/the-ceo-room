@@ -66,9 +66,12 @@ describe('percentages (bps)', () => {
     expect(formatBps(930, 'en', 1)).toBe('9.3%');
     expect(formatBps(2000, 'tr', 'auto')).toBe('%20');
     expect(formatBps(151, 'tr', 'auto')).toBe('%1,5');
+    expect(formatBps(596, 'en', 'auto')).toBe('6%');
   });
   it('signed', () => {
     expect(formatSignedBps(596, 'tr')).toBe('+%6');
+    expect(formatSignedBps(596, 'tr', 'auto')).toBe('+%6');
+    expect(formatSignedBps(2140, 'en', 'auto')).toBe('+21.4%');
     expect(formatSignedBps(596, 'en')).toBe('+6%');
     expect(formatSignedBps(-200, 'en')).toBe(`${MINUS}2%`);
     expect(formatSignedBps(0, 'tr')).toBe('%0');

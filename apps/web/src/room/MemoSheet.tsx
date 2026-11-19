@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useT } from '../i18n';
 import { canDecide, currentMemoPreview, useGame } from '../store/game';
 import type { MemoCatalog, RoomView } from '../worker/protocol';
@@ -20,6 +20,9 @@ import {
 
 const field = 'min-h-touch box-border rounded-sm border-2 border-[#6b5a40] bg-[#f5ecd6] px-2 font-type text-label text-ink';
 const labelCls = 'flex flex-col gap-1 font-type text-label text-ink-muted';
+
+/** A line whose number has not been typed yet shows no error (the preview note asks for it). */
+const untouched = (l: MemoLine): boolean => ('qty' in l ? l.qty : 'percent' in l ? l.percent : 'x').trim() === '';
 
 function LineFields({ line, c, index, onChange }: { line: MemoLine; c: MemoCatalog; index: number; onChange: (l: MemoLine) => void }) {
   const t = useT();
@@ -152,6 +155,10 @@ export function MemoSheet({ v }: { v: RoomView }) {
   const [addKind, setAddKind] = useState<MemoKind>(kinds[0]!);
   const [pressing, setPressing] = useState(false);
   const checked = useMemo(() => memoCommands(lines, c), [lines, c]);
+  // a refused seal (engine error) lifts the seal again
+  useEffect(() => {
+    if (pending === null) setPressing(false);
+  }, [pending]);
 
   const previewed = memo !== null && sameMemo(checked.commands, memo.commands);
   const ready = previewed && current !== null && current.status === 'ready' && current.preview !== null;
@@ -184,13 +191,13 @@ export function MemoSheet({ v }: { v: RoomView }) {
                 <button
                   type="button"
                   onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}
-                  className="press ml-auto min-h-touch cursor-pointer rounded-sm border-2 border-ink bg-transparent px-3 font-type text-label font-bold text-ink hover:bg-[rgba(36,26,16,.08)]"
+                  className="press ml-auto min-h-touch min-w-touch cursor-pointer rounded-sm border-2 border-ink bg-transparent px-3 font-type text-label font-bold text-ink hover:bg-[rgba(36,26,16,.08)]"
                   aria-label={t.t('ui.room.memo.remove.aria', { n: i + 1 })}
                 >
                   {t.t('ui.room.memo.remove')}
                 </button>
               </div>
-              {checked.errors[i] && (
+              {checked.errors[i] && !untouched(l) && (
                 <p className="m-0 mt-1 text-oxblood-ink" role="alert" data-testid="memo-error">
                   {t.t(checked.errors[i]!.key, checked.errors[i]!.params)}
                 </p>

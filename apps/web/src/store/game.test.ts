@@ -7,7 +7,7 @@ import { loadSeed } from '@ceo-room/seed-data';
 import type { SeedBundle } from '@ceo-room/engine';
 import { createHandler } from '../worker/handler';
 import type { StoredSave, WorkerRequest, WorkerResponse } from '../worker/protocol';
-import { PLAY_INTERVAL_MS, setTransport, useGame } from './game';
+import { PLAY_INTERVAL_MS, canDecide, currentMemoPreview, currentRoomView, setTransport, useGame } from './game';
 import { BACKUP_KEY, SAVE_KEY } from './storage';
 
 const seed = loadSeed();
@@ -262,5 +262,208 @@ describe('dossier refresh and auto-play', () => {
     useGame.getState().receive({ type: 'busy', busy: null });
     vi.advanceTimersByTime(PLAY_INTERVAL_MS);
     expect(advances()).toBe(2);
+  });
+});
+
+describe('Decision Room', () => {
+  const DEC = 'dec-0001';
+  const room = () => useGame.getState().room;
+
+  it('opens on a decision, shows the current view, approves the selected option and returns to the Desk', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    expect(useGame.getState().view).toBe('room');
+    expect(c.sent.at(-1)).toEqual({ type: 'openRoom', decisionId: DEC });
+    await c.settle();
+    const v = currentRoomView(useGame.getState())!;
+    expect(v.decisionId).toBe(DEC);
+    expect(canDecide(useGame.getState())).toBe(true);
+
+    // the seal needs a selection; the default option is the baseline, not a choice
+    useGame.getState().approve();
+    expect(c.sent.filter((m) => m.type === 'dispatch')).toHaveLength(0);
+    useGame.getState().selectOption('absorb');
+    expect(room()?.selected).toBeNull();
+    useGame.getState().selectOption('switch');
+    useGame.getState().approve();
+    useGame.getState().approve();
+    expect(c.sent.filter((m) => m.type === 'dispatch')).toEqual([
+      { type: 'dispatch', command: { type: 'approveOption', decisionId: DEC, optionId: 'switch' } },
+    ]);
+    expect(room()?.pending).toBe('approve');
+    await c.settle();
+
+    // decided: the room and its tab are gone, the carbon copy of the ledger is open on the Desk
+    const s = useGame.getState();
+    expect(s.room).toBeNull();
+    expect(s.view).toBe('desk');
+    expect(c.sent).toContainEqual({ type: 'closeRoom' });
+    expect(s.ledgerSlip).toMatchObject({ decisionId: DEC, status: 'approved', optionId: 'switch' });
+    expect(s.ledgerOpen).toBe(true);
+    expect(s.report?.pendingDecisions).toEqual([]);
+    useGame.getState().closeLedger();
+    expect(useGame.getState().ledgerOpen).toBe(false);
+  });
+
+  it('reject runs the default; a refused command keeps the room open with a slip', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    await c.settle();
+    // a refusal from the engine (here: the decision closed behind the room's back)
+    useGame.getState().receive({ type: 'dispatched', ok: false, command: { type: 'rejectDecision', decisionId: DEC }, error: { code: 'error.decisionClosed', params: {} } });
+    expect(useGame.getState().notice?.detail.code).toBe('error.decisionClosed');
+    useGame.getState().dismissNotice();
+
+    useGame.getState().reject();
+    expect(room()?.pending).toBe('reject');
+    await c.settle();
+    expect(useGame.getState().room).toBeNull();
+    expect(useGame.getState().ledgerSlip).toMatchObject({ status: 'rejected', optionId: 'absorb' });
+  });
+
+  it('an engine error clears the pending action and the room stays', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    await c.settle();
+    useGame.getState().selectOption('negotiate');
+    useGame.getState().approve();
+    useGame.getState().receive({ type: 'dispatched', ok: false, command: { type: 'approveOption', decisionId: DEC, optionId: 'negotiate' }, error: { code: 'error.unknownOption', params: {} } });
+    expect(room()?.pending).toBeNull();
+    expect(useGame.getState().view).toBe('room');
+    expect(useGame.getState().notice).toMatchObject({ key: 'ui.status.commandFailed', detail: { code: 'error.unknownOption' } });
+    await c.settle();
+  });
+
+  it('a view for an older version is never shown; the Desk tab keeps the room, which follows the day', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    await c.settle();
+    const old = room()!.view!;
+    // a stale view arriving late is dropped
+    useGame.getState().receive({ type: 'room', decisionId: DEC, version: old.version - 1, view: null });
+    expect(room()!.view).toEqual(old);
+
+    useGame.getState().showDesk();
+    expect(useGame.getState().view).toBe('desk');
+    useGame.getState().advance(3);
+    await c.settle();
+    expect(day()).toBe(4);
+    // only one room view after the advance (none during it), for the new version
+    const fresh = currentRoomView(useGame.getState())!;
+    expect(fresh.day).toBe(4);
+    expect(fresh.daysLeft).toBe(4);
+    useGame.getState().showRoom();
+    expect(useGame.getState().view).toBe('room');
+    useGame.getState().closeRoom();
+    expect(useGame.getState().room).toBeNull();
+    expect(c.sent.at(-1)).toEqual({ type: 'closeRoom' });
+  });
+
+  it('while the report is newer than the room view, the view reads as missing', () => {
+    setTransport({ send: () => {} });
+    useGame.setState({ phase: 'ready', version: 5, room: { decisionId: DEC, view: { version: 4, data: null }, selected: null, pending: null, memoOpen: false, memo: null } });
+    expect(currentRoomView(useGame.getState())).toBeNull();
+    expect(canDecide(useGame.getState())).toBe(false);
+  });
+
+  it('request analysis stays in the room; the +90 view follows the next day', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    await c.settle();
+    useGame.getState().requestAnalysis();
+    await c.settle();
+    expect(useGame.getState().view).toBe('room');
+    expect(room()?.pending).toBeNull();
+    expect(currentRoomView(useGame.getState())!.analysis).toMatchObject({ readyDay: 2, ready: false });
+    // a second request is not sent
+    useGame.getState().requestAnalysis();
+    expect(c.sent.filter((m) => m.type === 'dispatch' && m.command.type === 'requestAnalysis')).toHaveLength(1);
+    useGame.getState().advance(1);
+    await c.settle();
+    expect(currentRoomView(useGame.getState())!.analysis!.extended!.horizons).toEqual([7, 30, 90]);
+  });
+
+  it('a memo is previewed, refreshed when the day changes, and sealed exactly as previewed', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    await c.settle();
+    useGame.getState().openMemo();
+    expect(room()?.memoOpen).toBe(true);
+    // nothing to seal before a preview
+    useGame.getState().sealMemo();
+    expect(c.sent.filter((m) => m.type === 'dispatch')).toHaveLength(0);
+
+    const memo = [{ type: 'repriceOrders' as const, materialId: 'steel', passThroughBps: 5000 }];
+    useGame.getState().previewMemo(memo);
+    expect(room()?.memo?.status).toBe('waiting');
+    await c.settle();
+    expect(currentMemoPreview(useGame.getState())?.preview?.impact.error).toBeNull();
+
+    // a day passes (memo open on another tab): the preview is asked again for the new state
+    useGame.getState().showDesk();
+    useGame.getState().advance(1);
+    await c.settle();
+    expect(c.sent.filter((m) => m.type === 'previewCustom')).toHaveLength(2);
+    expect(currentMemoPreview(useGame.getState())?.version).toBe(useGame.getState().version);
+
+    useGame.getState().showRoom();
+    useGame.getState().sealMemo();
+    expect(c.sent.at(-1)).toEqual({ type: 'dispatch', command: { type: 'customDecision', decisionId: DEC, commands: memo } });
+    await c.settle();
+    expect(useGame.getState().room).toBeNull();
+    expect(useGame.getState().ledgerSlip).toMatchObject({ custom: true, status: 'approved' });
+  });
+
+  it('a memo the engine refuses cannot be sealed', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    await c.settle();
+    useGame.getState().previewMemo([{ type: 'grantDiscount', customerId: 'cus_velora', discountBps: 9000 }]);
+    await c.settle();
+    expect(currentMemoPreview(useGame.getState())?.preview?.impact.error?.code).toBe('error.invalidRate');
+    useGame.getState().sealMemo();
+    expect(c.sent.filter((m) => m.type === 'dispatch')).toHaveLength(0);
+  });
+
+  it('auto-play waits while the Decision Room is in front, and while the carbon copy is open', () => {
+    vi.useFakeTimers();
+    const sent: WorkerRequest[] = [];
+    setTransport({ send: (m) => sent.push(m) });
+    useGame.setState({ phase: 'ready' });
+    const advances = () => sent.filter((m) => m.type === 'advance').length;
+    useGame.getState().play();
+    useGame.getState().openRoom(DEC);
+    vi.advanceTimersByTime(PLAY_INTERVAL_MS * 3);
+    expect(advances()).toBe(0);
+    useGame.getState().showDesk();
+    useGame.setState({ ledgerOpen: true });
+    vi.advanceTimersByTime(PLAY_INTERVAL_MS * 2);
+    expect(advances()).toBe(0);
+    useGame.getState().closeLedger();
+    vi.advanceTimersByTime(PLAY_INTERVAL_MS);
+    expect(advances()).toBe(1);
+  });
+
+  it('a new game closes the room and clears the slip', async () => {
+    const c = connect();
+    await c.init(null);
+    useGame.getState().openRoom(DEC);
+    await c.settle();
+    useGame.getState().reject();
+    await c.settle();
+    expect(useGame.getState().ledgerSlip).not.toBeNull();
+    useGame.getState().openRoom('dec-0001');
+    useGame.getState().newGame();
+    await c.settle();
+    expect(useGame.getState().room).toBeNull();
+    expect(useGame.getState().ledgerSlip).toBeNull();
+    expect(useGame.getState().view).toBe('desk');
   });
 });

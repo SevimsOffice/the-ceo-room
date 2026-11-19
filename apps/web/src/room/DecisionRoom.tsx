@@ -200,12 +200,15 @@ function OptionNote({ v, optionId, index, stamp }: { v: RoomView; optionId: stri
       </div>
       <button
         type="button"
-        onClick={() => select(optionId)}
-        disabled={!decidable || stamp !== null}
+        onClick={() => {
+          if (decidable && stamp === null) select(optionId);
+        }}
+        // aria-disabled, not disabled: a pressed choice keeps the keyboard focus
+        aria-disabled={!decidable || stamp !== null}
         aria-pressed={selected}
         className={`press mt-auto box-border h-touch w-full cursor-pointer rounded-[3px] border-2 border-oxblood font-display text-[16px] font-bold ${
           selected ? 'bg-oxblood text-cream-2' : 'bg-transparent text-oxblood hover:bg-[rgba(106,28,31,.08)]'
-        } disabled:cursor-not-allowed`}
+        } aria-disabled:cursor-not-allowed`}
         style={{ marginTop: 10 }}
         data-testid="choose-option"
       >

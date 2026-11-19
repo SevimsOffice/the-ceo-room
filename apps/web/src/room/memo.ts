@@ -88,9 +88,14 @@ export function parsePercent(text: string): number | null {
 /**
  * A typed whole quantity: plain digits ("12500") or digits grouped in thousands with one separator
  * used throughout ("12.500", "12,500", "12 500"). Anything else ("2.5", "1,5", "0.5", "12.34.5",
- * "1.234,567") is not a quantity: a decimal must never be read as a larger whole number.
+ * "1.234,567", "0.500") is not a quantity: a decimal must never be read as a larger whole number.
+ * A grouped number starts with a non-zero group; plain digits may have leading zeros ("007" = 7).
+ * A well-formed whole number too large to hold reads as null too (see `isWholeQty`).
  */
-const QTY = /^(?:\d+|\d{1,3}(?:([.,\s])\d{3}(?:\1\d{3})*))$/;
+const QTY = /^(?:\d+|[1-9]\d{0,2}(?:([.,\s])\d{3}(?:\1\d{3})*))$/;
+
+/** The text is written as a whole quantity, whatever its size (a range error, not a format error). */
+export const isWholeQty = (text: string): boolean => QTY.test(text.trim());
 
 export function parseQty(text: string): number | null {
   const s = text.trim();
@@ -109,7 +114,8 @@ export function lineToCommand(line: MemoLine, c: MemoCatalog): LineResult {
     case 'placePurchaseOrder': {
       if (!c.offers.some((o) => o.supplierId === line.supplierId && o.materialId === line.materialId)) return err('noOffer');
       const qty = parseQty(line.qty);
-      if (qty === null) return err('qtyFormat');
+      // a whole number too large to hold is out of range, not malformed
+      if (qty === null) return isWholeQty(line.qty) ? err('qty', { max: c.limits.maxPurchaseQty }) : err('qtyFormat');
       if (qty < 1 || qty > c.limits.maxPurchaseQty) return err('qty', { max: c.limits.maxPurchaseQty });
       return { ok: true, command: { type: 'placePurchaseOrder', supplierId: line.supplierId, materialId: line.materialId, qty } };
     }

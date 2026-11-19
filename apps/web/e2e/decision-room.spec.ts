@@ -281,7 +281,15 @@ test('a custom decision memo is previewed by the engine and sealed', async ({ pa
   await memo.getByTestId('memo-add').click();
   await memo.getByTestId('memo-pass').fill('50');
   await expect(memo.getByTestId('memo-seal')).toBeDisabled();
-  await memo.getByTestId('memo-preview-button').click();
+  // keyboard: Enter on Preview keeps focus on it, inside the sheet, while the engine answers
+  await memo.getByTestId('memo-preview-button').focus();
+  await page.keyboard.press('Enter');
+  await expect(memo.getByTestId('memo-preview-button')).toBeFocused();
+  // and Tab stays trapped in the sheet
+  for (let i = 0; i < 14; i++) {
+    await page.keyboard.press('Tab');
+    expect(await memo.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+  }
 
   const cmds: CeoCommand[] = [
     { type: 'placePurchaseOrder', supplierId: 'sup_kuzeycelik', materialId: 'steel', qty: 2000 },

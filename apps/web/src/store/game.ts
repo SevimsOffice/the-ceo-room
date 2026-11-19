@@ -517,8 +517,10 @@ export const useGame = create<GameState>()((set, get) => ({
         return;
       case 'room': {
         const s = get();
-        // a view for an older state is dropped: the worker follows with the current one
-        if (!s.room || s.room.decisionId !== msg.decisionId || msg.version !== s.version) return;
+        // a view for an older state is dropped: the worker follows with the current one. While the
+        // room is leaving (the seal coming down) its last view stays frozen: a later one (the
+        // decision now closed) would pull the seal and the memo away mid-press
+        if (!s.room || s.room.leaving || s.room.decisionId !== msg.decisionId || msg.version !== s.version) return;
         const data = msg.view;
         const selected = s.room.selected && data?.options.some((o) => o.id === s.room!.selected) ? s.room.selected : null;
         set({ room: { ...s.room, view: { version: msg.version, data }, selected } });

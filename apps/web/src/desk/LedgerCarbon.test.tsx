@@ -17,6 +17,9 @@ import { LedgerCarbon, lineText } from './LedgerCarbon';
 
 const seed = loadSeed();
 const RAW_ID = /\b(dec|cmd|ord|po|pay|rcv|dev)-\d+/;
+/** every option id of every decision kind the engine opens, as a ledger line would quote it */
+const OPTION_IDS = ['absorb', 'negotiate', 'switch', 'passOn', 'grant', 'refuse'];
+const rawOption = (text: string): string | undefined => OPTION_IDS.find((id) => text.includes(`“${id}”`) || text.includes(`"${id}"`));
 
 function slipAfter(cmd: Command) {
   const e = createEngine(seed, { rngSeed: RNG_SEED, workspaceId: WORKSPACE_ID });
@@ -55,6 +58,7 @@ describe('ledger carbon copy', () => {
         render(<LedgerCarbon />);
         const text = screen.getByTestId('ledger-sheet').textContent!;
         expect(text).not.toMatch(RAW_ID);
+        expect(rawOption(text)).toBeUndefined();
         expect(screen.getByTestId('ledger-slip').textContent).not.toMatch(RAW_ID);
         const t = createTranslator(locale, { directory });
         // the instruction by its name, the decision by its number
@@ -73,6 +77,35 @@ describe('ledger carbon copy', () => {
       });
     }
   }
+
+  it('a default option that could not run is named by its label, never its id (tr, en)', () => {
+    const { slip, directory } = slipAfter(CASES[0]![1]);
+    expect(slip.options).toMatchObject({ absorb: 'option.supplierPrice.absorb', switch: 'option.supplierPrice.switch' });
+    for (const locale of ['tr', 'en'] as const) {
+      const t = createTranslator(locale, { directory });
+      for (const optionId of Object.keys(slip.options)) {
+        const line = { seq: 0, day: 8, code: 'ledger.DecisionDefaultFailed', params: { decisionId: 'dec-0001', optionId, reason: 'error.insufficientCash' }, cause: { kind: 'rule' as const, ruleId: 'rule.decision.deadline' } };
+        const out = lineText(t, slip, line);
+        expect(out).toContain(t.t(slip.options[optionId]!));
+        expect(rawOption(out), out).toBeUndefined();
+        expect(out).not.toMatch(RAW_ID);
+      }
+    }
+  });
+
+  it('supplier bills and deposits say which purchase order they belong to', () => {
+    const { slip, directory } = slipAfter(CASES[1]![1]);
+    const poId = Object.keys(slip.parties).find((k) => slip.parties[k]!.kind === 'supplier')!;
+    const params = { poId, payableId: 'pay-0007', amount: 100_000, dueDay: 30, supplierId: 'sup_kuzeycelik' };
+    const line = (code: string) => ({ seq: 0, day: 1, code, params, cause: { kind: 'rule' as const, ruleId: 'x' } });
+    const en = createTranslator('en', { directory });
+    const tr = createTranslator('tr', { directory });
+    for (const code of ['ledger.PayableCreated', 'ledger.PayableCancelled', 'ledger.DepositForfeited']) {
+      expect(lineText(en, slip, line(code))).toContain('purchase order No. ');
+      expect(lineText(tr, slip, line(code))).toMatch(/No\. \d+.* satın alma siparişi/);
+      expect(lineText(en, slip, line(code))).not.toMatch(RAW_ID);
+    }
+  });
 
   it('an order without its customer on the line is named by the customer the slip knows', () => {
     const { slip, directory } = slipAfter(CASES[1]![1]);

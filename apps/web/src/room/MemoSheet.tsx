@@ -173,6 +173,7 @@ export function MemoSheet({ v }: { v: RoomView }) {
   const ready = previewed && current !== null && current.status === 'ready' && current.preview !== null;
   const engineError = ready ? (current.preview!.impact.error ?? null) : null;
   const canSeal = ready && !engineError && decidable && pending === null;
+  const canPreview = checked.commands !== null && !busy && !(previewed && memo?.status === 'waiting');
 
   let previewNote: string | null = null;
   if (!checked.commands) previewNote = t.t('ui.room.memo.fixFirst');
@@ -258,9 +259,13 @@ export function MemoSheet({ v }: { v: RoomView }) {
           <div className="flex flex-1 flex-col items-end gap-4">
             <button
               type="button"
-              onClick={() => checked.commands && previewMemo(checked.commands)}
-              disabled={!checked.commands || busy || (previewed && memo?.status === 'waiting')}
-              className="press min-h-touch cursor-pointer rounded-sm border-2 border-bottle bg-bottle px-5 font-display text-lg font-bold text-cream-2 hover:bg-[#3a5a47] disabled:opacity-60"
+              onClick={() => {
+                if (!canPreview || !checked.commands) return;
+                previewMemo(checked.commands);
+              }}
+              // aria-disabled, not disabled: a pressed Preview keeps the keyboard focus inside the sheet
+              aria-disabled={!canPreview}
+              className="press min-h-touch cursor-pointer rounded-sm border-2 border-bottle bg-bottle px-5 font-display text-lg font-bold text-cream-2 hover:bg-[#3a5a47] aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
               data-testid="memo-preview-button"
             >
               {t.t('ui.room.memo.previewButton')}

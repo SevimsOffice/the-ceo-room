@@ -163,5 +163,6 @@ export function ledgerSlip(s: Readonly<CompanyState>, ledger: readonly GameEvent
     lines: shown,
     more: Math.max(0, lines.length - SLIP_LINES),
     parties,
+    options: Object.fromEntries((d?.options ?? []).map((o) => [o.id, o.labelKey])),
   };
 }

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadSeed } from '@ceo-room/seed-data';
 import type { SeedBundle } from '@ceo-room/engine';
 import { createHandler } from '../worker/handler';
-import type { StoredSave, WorkerRequest, WorkerResponse } from '../worker/protocol';
+import type { RoomView, StoredSave, WorkerRequest, WorkerResponse } from '../worker/protocol';
 import { PRESS_MS } from '../room/ActionBar';
 import { PLAY_INTERVAL_MS, canDecide, currentMemoPreview, currentRoomView, setTransport, useGame } from './game';
 import { BACKUP_KEY, SAVE_KEY } from './storage';
@@ -550,6 +550,25 @@ describe('Decision Room', () => {
     expect(currentMemoPreview(useGame.getState())?.preview?.impact.error?.code).toBe('error.invalidRate');
     useGame.getState().sealMemo();
     expect(c.sent.filter((m) => m.type === 'dispatch')).toHaveLength(0);
+  });
+
+  it('while the seal comes down, a later room view (the decision now closed) does not replace the frozen one', () => {
+    vi.useFakeTimers();
+    setTransport({ send: () => {} });
+    const view = { decisionId: DEC, status: 'open', options: [{ id: 'absorb' }, { id: 'switch' }] } as unknown as RoomView;
+    useGame.setState({ phase: 'ready', version: 3, view: 'room', room: { decisionId: DEC, view: { version: 3, data: view }, selected: 'switch', pending: null, memoOpen: true, memo: null } });
+    useGame.getState().approve(PRESS_MS);
+    useGame.getState().receive({ type: 'dispatched', ok: true, command: { type: 'approveOption', decisionId: DEC, optionId: 'switch' } });
+    expect(room()?.leaving).toBe(true);
+    // the worker had a view queued for the next state: the decision is closed in it
+    useGame.getState().receive({ type: 'report', version: 4, report: useGame.getState().report as never });
+    useGame.getState().receive({ type: 'room', decisionId: DEC, version: 4, view: { ...view, status: 'approved' } as RoomView });
+    expect(room()?.view).toEqual({ version: 3, data: view });
+    expect(currentRoomView(useGame.getState())?.status).toBe('open');
+    expect(room()?.memoOpen).toBe(true);
+    vi.advanceTimersByTime(PRESS_MS);
+    expect(useGame.getState().room).toBeNull();
+    expect(useGame.getState().view).toBe('desk');
   });
 
   it('auto-play waits while the Decision Room is in front, and while the carbon copy is open', () => {

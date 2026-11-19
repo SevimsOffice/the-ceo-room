@@ -44,7 +44,11 @@ describe('memo lines', () => {
 
   it('never reads a decimal quantity as a larger whole number; grouped thousands are accepted', () => {
     // review fix: "2.5" was read as 25 and "1,5" as 15
-    for (const bad of ['2.5', '1,5', '0.5', '12.34.5', '1.234,567', '12.50', '1 5', '.500', '12.']) expect(parseQty(bad), bad).toBeNull();
+    for (const bad of ['2.5', '1,5', '0.5', '12.34.5', '1.234,567', '12.50', '1 5', '.500', '12.', '0.500', '0,500', '000.500', '00.500', '0 500']) expect(parseQty(bad), bad).toBeNull();
+    // review fix: a grouped number never starts with a zero group ("0.500" is a decimal, not 500)
+    expect(parseQty('007')).toBe(7);
+    expect(parseQty('1.000.000')).toBe(1_000_000);
+    expect(parseQty('100.000')).toBe(100_000);
     expect(parseQty('12.500')).toBe(12500);
     expect(parseQty('12,500')).toBe(12500);
     expect(parseQty('12500')).toBe(12500);
@@ -54,6 +58,10 @@ describe('memo lines', () => {
     expect(po('2.5')).toMatchObject({ ok: false, error: { key: 'ui.room.memo.error.qtyFormat' } });
     expect(po('1,5')).toMatchObject({ ok: false, error: { key: 'ui.room.memo.error.qtyFormat' } });
     expect(po('12.500')).toMatchObject({ ok: true, command: { qty: 12500 } });
+    expect(po('0.500')).toMatchObject({ ok: false, error: { key: 'ui.room.memo.error.qtyFormat' } });
+    // review fix: a whole number too large is out of range (with the max), not malformed
+    const range = { ok: false, error: { key: 'ui.room.memo.error.qty', params: { max: catalog.limits.maxPurchaseQty } } };
+    for (const big of ['9999999999999', '12345678901234567890', '1.000.000.000.000', String(catalog.limits.maxPurchaseQty + 1)]) expect(po(big), big).toMatchObject(range);
     expect(tr.has('ui.room.memo.error.qtyFormat') && en.has('ui.room.memo.error.qtyFormat')).toBe(true);
   });
 
@@ -268,6 +276,40 @@ describe('DecisionRoom', () => {
     expect(sent).toHaveLength(1);
     act(() => useGame.setState({ playing: false }));
     expect(day.getAttribute('aria-disabled')).toBe('false');
+  });
+
+  it('a pressed Preview keeps the focus in the memo (aria-disabled while previewing, never disabled)', () => {
+    useGame.setState({ room: { ...useGame.getState().room!, memoOpen: true } });
+    render(<DecisionRoom />);
+    fireEvent.change(screen.getByTestId('memo-qty'), { target: { value: '100' } });
+    const preview = screen.getByTestId('memo-preview-button');
+    expect(preview.getAttribute('aria-disabled')).toBe('false');
+    preview.focus();
+    fireEvent.click(preview);
+    expect(sent.filter((m) => m.type === 'previewCustom')).toHaveLength(1);
+    expect(useGame.getState().room?.memo?.status).toBe('waiting');
+    expect(preview.hasAttribute('disabled')).toBe(false);
+    expect(preview.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(preview);
+    // pressed again while waiting: nothing more is asked
+    fireEvent.click(preview);
+    expect(sent.filter((m) => m.type === 'previewCustom')).toHaveLength(1);
+  });
+
+  it('a choice cannot be made while a decision is being sent; the pressed choice keeps the focus', () => {
+    render(<DecisionRoom />);
+    const choose = screen.getAllByTestId('choose-option')[0]!;
+    choose.focus();
+    act(() => useGame.setState({ room: { ...useGame.getState().room!, pending: 'analysis' } }));
+    expect(choose.hasAttribute('disabled')).toBe(false);
+    expect(choose.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(choose);
+    fireEvent.click(choose);
+    expect(useGame.getState().room?.selected).toBeNull();
+    act(() => useGame.setState({ room: { ...useGame.getState().room!, pending: null } }));
+    expect(choose.getAttribute('aria-disabled')).toBe('false');
+    fireEvent.click(choose);
+    expect(useGame.getState().room?.selected).toBe('negotiate');
   });
 
   it('while its figures are for an older day the room shows no numbers', () => {

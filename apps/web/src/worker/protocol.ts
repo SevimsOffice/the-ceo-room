@@ -126,6 +126,8 @@ export interface LedgerSlip {
   more: number;
   /** who an order (customer) or purchase order (supplier) named in `lines` is with, where known */
   parties: Record<string, LedgerParty>;
+  /** the label key of each option of the decision, so a line naming an option prints its label */
+  options: Record<string, string>;
 }
 
 /** The counterparty of an order or a purchase order, so the slip can name it instead of its id. */

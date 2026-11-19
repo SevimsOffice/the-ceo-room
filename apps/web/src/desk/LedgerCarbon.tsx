@@ -41,10 +41,12 @@ export function lineText(t: Translator, slip: LedgerSlip, l: LedgerLine): string
     const type = typeof params.commandType === 'string' ? t.t(`ui.command.${params.commandType}`) : '';
     return t.t('ui.ledger.line.commandAccepted', { type });
   }
-  if (l.code === 'ledger.DecisionResolved') {
-    if (typeof params.status === 'string') params.status = t.t(`ui.decision.status.${params.status}`);
-    if (params.optionId === 'custom') params.optionId = t.t('ui.ledger.customOption');
-    else if (slip.optionLabelKey && params.optionId === slip.optionId) params.optionId = t.t(slip.optionLabelKey);
+  if (l.code === 'ledger.DecisionResolved' && typeof params.status === 'string') params.status = t.t(`ui.decision.status.${params.status}`);
+  // any line naming an option (resolved, a default that failed) prints its label, never its id
+  if (typeof params.optionId === 'string') {
+    const key = params.optionId === slip.optionId && slip.optionLabelKey ? slip.optionLabelKey : slip.options[params.optionId];
+    if (l.code === 'ledger.DecisionResolved' && params.optionId === 'custom') params.optionId = t.t('ui.ledger.customOption');
+    else if (key) params.optionId = t.t(key);
   }
   if (typeof params.decisionId === 'string') params.decisionId = t.t('ui.ledger.ref.decision', { n: decisionNumber(params.decisionId) });
   for (const k of ['orderId', 'poId'] as const) {

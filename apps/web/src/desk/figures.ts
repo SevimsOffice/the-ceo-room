@@ -170,3 +170,17 @@ export function decisionNumber(id: string): number {
 export function daysLeftText(t: Translator, daysLeft: number): string {
   return daysLeft <= 0 ? t.t('ui.decision.dueToday') : t.plural('ui.decision.daysLeft', daysLeft);
 }
+
+/** How each supporting figure of a decision (selectDecision / selectDecisionSummary) is printed. */
+export function figureText(t: Translator, code: string, value: number): string {
+  switch (code) {
+    case 'figure.cash':
+    case 'figure.backlogValue':
+    case 'figure.affectedOrderValue':
+      return t.money(value);
+    case 'figure.grossMarginBps':
+      return formatBps(value, t.locale, 1);
+    default:
+      return formatInt(value, t.locale);
+  }
+}

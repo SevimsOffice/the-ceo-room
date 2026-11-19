@@ -51,9 +51,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-button {
-  font: inherit;
-  color: inherit;
+/* In the base layer, so that a button's own font and colour utilities win over it */
+@layer base {
+  button {
+    font: inherit;
+    color: inherit;
+  }
 }
 
 /* Brass: plates, labels, bell plate, controls */
@@ -227,6 +230,49 @@ button:disabled {
 
 .needle {
   transition: transform 900ms cubic-bezier(0.3, 0.6, 0.2, 1);
+}
+
+/* The wax seal comes down: pressed, held, lifted */
+@keyframes seal-press {
+  0% {
+    transform: scale(1) translateY(0);
+  }
+  35% {
+    transform: scale(0.9) translateY(4px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6), inset 0 0 0 5px rgba(255, 255, 255, 0.1);
+  }
+  70% {
+    transform: scale(0.92) translateY(3px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+.seal-press {
+  animation: seal-press 650ms cubic-bezier(0.3, 0.6, 0.2, 1) both;
+}
+.seal:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+/* Ink stamps land on the paper */
+@keyframes stamp-in {
+  0% {
+    opacity: 0;
+    scale: 1.35;
+  }
+  45% {
+    opacity: 1;
+    scale: 0.97;
+  }
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+.stamp-in {
+  animation: stamp-in 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  mix-blend-mode: multiply;
 }
 
 @media (prefers-reduced-motion: reduce) {

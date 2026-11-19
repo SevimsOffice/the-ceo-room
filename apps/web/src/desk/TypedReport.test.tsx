@@ -75,7 +75,8 @@ describe('TelegramStack', () => {
     const price = forms.find((f) => f.dataset.code === 'card.supplierPriceIncrease')!;
     fireEvent.click(price.querySelector('button')!);
     expect(sent).toHaveLength(1);
-    fireEvent.click(screen.getByText('Open dossier No. 1'));
-    expect(sent.at(-1)).toEqual({ type: 'openDecision', decisionId: 'dec-0001' });
+    fireEvent.click(screen.getByText('Take decision No. 1 in the Decision Room'));
+    expect(sent.at(-1)).toEqual({ type: 'openRoom', decisionId: 'dec-0001' });
+    expect(useGame.getState().view).toBe('room');
   });
 });

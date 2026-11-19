@@ -1,23 +1,7 @@
-import type { Translator } from '@ceo-room/i18n';
-import { formatBps, formatInt } from '@ceo-room/i18n';
 import { useT } from '../i18n';
 import { currentRunway, useGame } from '../store/game';
 import { Sheet } from './Sheet';
-import { daysLeftText, decisionNumber, runwayText } from './figures';
-
-/** How each supporting figure (selectDecisionSummary) is printed. */
-function figureText(t: Translator, code: string, value: number): string {
-  switch (code) {
-    case 'figure.cash':
-    case 'figure.backlogValue':
-    case 'figure.affectedOrderValue':
-      return t.money(value);
-    case 'figure.grossMarginBps':
-      return formatBps(value, t.locale, 1);
-    default:
-      return formatInt(value, t.locale);
-  }
-}
+import { daysLeftText, decisionNumber, figureText, runwayText } from './figures';
 
 function FigureRow({ label, value, testId }: { label: string; value: string; testId?: string }) {
   return (
@@ -30,11 +14,12 @@ function FigureRow({ label, value, testId }: { label: string; value: string; tes
   );
 }
 
-/** A decision's dossier, read-only: the decision itself is taken in the Decision Room (next milestone). */
+/** A decision's dossier, read-only: the decision itself is taken in the Decision Room (button). */
 export function DossierSheet() {
   const t = useT();
   const dossier = useGame((s) => s.dossier);
   const close = useGame((s) => s.closeDossier);
+  const openRoom = useGame((s) => s.openRoom);
   // the runway is the live projection the report shows (capped: "180+ gün"), not a dossier figure
   const live = useGame(currentRunway);
   if (!dossier) return null;
@@ -77,9 +62,21 @@ export function DossierSheet() {
           </ol>
           {v.status === 'open' && <p className="m-0 mt-3 text-label text-ink-muted">{t.t('ui.dossier.deadline', { day: v.deadlineDay })}</p>}
 
-          <p className="m-0 mt-5 font-hand text-[21px] font-semibold italic leading-snug" style={{ color: '#5a2a14' }} data-testid="dossier-room-note">
-            {t.t('ui.dossier.roomNote')}
-          </p>
+          {v.status === 'open' && (
+            <div className="mt-5 flex items-center gap-5">
+              <button
+                type="button"
+                onClick={() => openRoom(v.id)}
+                className="press min-h-touch shrink-0 cursor-pointer rounded-sm border-2 border-oxblood bg-oxblood px-5 font-display text-lg font-bold text-cream-2 hover:bg-[#7d2a2f]"
+                data-testid="dossier-open-room"
+              >
+                {t.t('ui.dossier.openRoom')}
+              </button>
+              <p className="m-0 font-hand text-[21px] font-semibold italic leading-snug" style={{ color: '#5a2a14' }} data-testid="dossier-room-note">
+                {t.t('ui.dossier.roomNote')}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </Sheet>

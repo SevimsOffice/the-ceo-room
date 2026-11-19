@@ -9,7 +9,7 @@ const TILT = [-1.2, 0.9, -0.6, 0.5];
 
 function Telegram({ tg, index, expanded, onToggle, isNew }: { tg: TelegramView; index: number; expanded: boolean; onToggle: () => void; isNew: boolean }) {
   const t = useT();
-  const openDossier = useGame((s) => s.openDossier);
+  const openRoom = useGame((s) => s.openRoom);
   const openOrderBook = useGame((s) => s.openOrderBook);
   const text = t.msg(tg.message);
   const read = tg.status === 'read';
@@ -79,10 +79,11 @@ function Telegram({ tg, index, expanded, onToggle, isNew }: { tg: TelegramView; 
               <p className="m-0 mt-1">{t.t('ui.telegram.decisionPending')}</p>
               <button
                 type="button"
-                onClick={() => openDossier(tg.decisionId!)}
+                onClick={() => openRoom(tg.decisionId!)}
                 className="press mt-2 min-h-touch cursor-pointer rounded-sm border border-[#6a2428] bg-[#6a2428] px-3 font-type text-label font-bold text-cream-2 hover:bg-[#7d2a2f]"
+                data-testid="telegram-open-room"
               >
-                {t.t('ui.telegram.openFolder', { n: decisionNumber(tg.decisionId) })}
+                {t.t('ui.telegram.openRoom', { n: decisionNumber(tg.decisionId) })}
               </button>
             </>
           ) : (

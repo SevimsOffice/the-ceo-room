@@ -39,7 +39,7 @@ export function Sheet({
         return;
       }
       if (e.key !== 'Tab' || !el) return;
-      const items = [...el.querySelectorAll<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')];
+      const items = [...el.querySelectorAll<HTMLElement>('button:not([disabled]), select:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')];
       if (items.length === 0) return;
       const first = items[0]!;
       const last = items[items.length - 1]!;

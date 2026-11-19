@@ -7,6 +7,8 @@ export function StatusSlip() {
   const report = useGame((s) => s.report);
   const notice = useGame((s) => s.notice);
   const dismiss = useGame((s) => s.dismissNotice);
+  // in the Decision Room the slip lies above the action bar
+  const inRoom = useGame((s) => s.view === 'room' && s.room !== null);
   return (
     <>
       <p className="sr-only" aria-live="polite" data-testid="day-announcement">
@@ -15,7 +17,7 @@ export function StatusSlip() {
       {notice && (
         <div
           role="status"
-          className="on-paper absolute bottom-[34px] left-[61px] z-20 w-[290px] px-4 py-3 font-type text-label leading-snug"
+          className={`on-paper absolute left-[61px] w-[290px] px-4 py-3 font-type text-label leading-snug ${inRoom ? 'bottom-[110px] z-[35]' : 'bottom-[34px] z-20'}`}
           style={{ background: '#e4d3a4', color: '#241a10', transform: 'rotate(-1deg)', boxShadow: '0 10px 18px rgba(0,0,0,.5)' }}
           data-testid="status-slip"
         >

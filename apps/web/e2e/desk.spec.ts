@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { type Page, expect, test } from '@playwright/test';
 import { createEngine, selectMorningReport, selectProjectedRunway } from '@ceo-room/engine';
 import { formatBps, formatMoneyParts, formatScorePercent } from '@ceo-room/i18n';
 import { loadSeed } from '@ceo-room/seed-data';
@@ -13,6 +13,20 @@ const money = (k: number, l: 'tr' | 'en') => {
 };
 
 test.describe.configure({ mode: 'serial' });
+
+/**
+ * Put a save game in the browser behind the app's back. Only once the app has stored its own first
+ * save: that save is posted by the engine worker after the page has loaded, and written after ours
+ * it would replace it (the reload would then restore a good game and show no slip).
+ */
+async function plantSave(page: Page, save: unknown): Promise<string> {
+  await page.goto('./');
+  await expect(page.getByTestId('calendar-day')).toHaveText('1');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ceo-room.save.v1'))).not.toBeNull();
+  const text = JSON.stringify(save);
+  await page.evaluate((v) => localStorage.setItem('ceo-room.save.v1', v), text);
+  return text;
+}
 
 test('the CEO journey: report, bell, week, month, language and save', async ({ page }) => {
   await page.goto('./');
@@ -126,11 +140,9 @@ test('below 1280 px wide the office asks for a larger screen', async ({ page }) 
 });
 
 test('a saved game that cannot be replayed starts a new game and says so', async ({ page }) => {
-  await page.goto('./');
-  await page.evaluate(() =>
-    localStorage.setItem('ceo-room.save.v1', JSON.stringify({ format: 1, seedVersion: 999, rngSeed: 42, workspaceId: 'ws_desk', log: [] })),
-  );
+  await plantSave(page, { format: 1, seedVersion: 999, rngSeed: 42, workspaceId: 'ws_desk', log: [] });
   const old = await page.evaluate(() => localStorage.getItem('ceo-room.save.v1'));
+  expect(old).toContain('"seedVersion":999');
   await page.reload();
   await expect(page.getByTestId('calendar-day')).toHaveText('1');
   const slip = page.getByTestId('status-slip');
@@ -144,10 +156,7 @@ test('a saved game that cannot be replayed starts a new game and says so', async
 });
 
 test('a save with a malformed log entry opens a new game, never an endless loading screen', async ({ page }) => {
-  await page.goto('./');
-  await page.evaluate(() =>
-    localStorage.setItem('ceo-room.save.v1', JSON.stringify({ format: 1, seedVersion: 1, rngSeed: 42, workspaceId: 'ws_desk', log: [null] })),
-  );
+  await plantSave(page, { format: 1, seedVersion: 1, rngSeed: 42, workspaceId: 'ws_desk', log: [null] });
   await page.reload();
   await expect(page.getByTestId('calendar-day')).toHaveText('1');
   await expect(page.getByTestId('loading')).toHaveCount(0);
@@ -236,8 +245,7 @@ test('at the smallest scale (1280×700) every control is ≥ 44 px and every tex
 });
 
 test('when the engine worker cannot start, an error slip offers a new game that works', async ({ page }) => {
-  await page.goto('./');
-  await page.evaluate(() => localStorage.setItem('ceo-room.save.v1', JSON.stringify({ format: 1, seedVersion: 1, rngSeed: 42, workspaceId: 'ws_desk', log: [] })));
+  await plantSave(page, { format: 1, seedVersion: 1, rngSeed: 42, workspaceId: 'ws_desk', log: [] });
   await page.route('**/engine.worker-*.js', (route) => route.abort());
   await page.reload();
   const slip = page.getByTestId('fatal-slip');

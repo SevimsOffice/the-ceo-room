@@ -42,6 +42,7 @@ data/seed/*.json                 static seed (generated once by scripts/generate
 packages/engine/                 pure simulation (no React, no LLM, no DOM)
 packages/i18n/                   tr/en message catalogues + number/currency formatting
 packages/seed-data/              loads and validates data/seed (SeedDataSource)
+packages/import/                 Excel template schema, validation, TemplateDataSource (pure)
 apps/web/                        React + Vite + Tailwind + Zustand UI; engine in a Web Worker
 scripts/                         seed generator, tooling
 .claude/agents/                  simulation-engineer, test-writer, code-reviewer

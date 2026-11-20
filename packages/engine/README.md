@@ -59,6 +59,10 @@ deep-frozen.
   with severity, day, message code+params, linked decision/order), `pendingDecisions` (deadline, days
   left, linked development, analysis ready). With `{ includeRunway: false }` it skips the 180-day
   projection: `runway` and `health` are `null` (type `MorningReportWithoutRunway`).
+- `selectCalendarDay(state, day = today)`: `{ day, date, weekday, weekdayCode, workday, forecast }`.
+  `date` is the real ISO date for an imported company (`Company.snapshotDate` = Day 1), null for the
+  seed; `forecast` = imported and after Day 1 (`isForecastDay`). The morning report carries `date`,
+  `forecast` and `company.{name, source, snapshotDate, simulated}` too.
 - `selectProjectedRunway(state)`: `Runway { days, capped, firstNegativeDay, horizonDays }` (memoised).
 - `selectOverallHealth(state, runway?)`: `{ score 0–100, band good|fair|poor|critical, code,
   components[{ id, code, value, score (0–10000), weight }] }`; formula in ADR-0007, weights in
@@ -94,6 +98,17 @@ deep-frozen.
 (`DECISION_HORIZONS` 7/30, `OUTLOOK_HORIZONS` 7/30/90), `CUSTOMER_RULES`,
 `DISCOUNT_GOODWILL_PER_100_BPS`, supplier slip, coverage, `CFO_CASH_TOLERANCE`, `RISK_RULES`, health
 weights and thresholds. Company facts stay in the seed.
+
+### Imported companies (M4a)
+
+`Company.source` is `'seed' | 'import'`, `Company.simulated` a boolean, `Company.snapshotDate` the ISO
+date of Day 1 (null for NOVARA) and `Company.day1Weekday` (0 = Monday) its derived weekday: the work
+calendar (`isWorkday(day, day1Weekday)`, `weekdayIndex`, `weekdayCode`) follows the real weekdays.
+`model/calendarDate.ts` has the pure integer civil-date helpers (`simDayToDate`, `dateToSimDay`,
+`isoWeekdayIndex`, `parseIsoDate`, …). Imported records may carry plain labels beside their keys
+(`Company.name`, `ProductFamily.name`, `Material.name`, `ProductionLine.kindName`; keys
+`IMPORTED_LABEL_KEYS`). A seed may omit `source` / `snapshotDate` (defaults `'seed'` / null). The
+import itself lives in `packages/import`.
 
 ## Daily tick
 

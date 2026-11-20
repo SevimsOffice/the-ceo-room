@@ -6,7 +6,7 @@
  * then defaults for blank optional cells, each reported as `info`.
  * Pure and deterministic: the same workbook always gives the same report and the same parsed rows.
  */
-import { dateToSimDay, epochDayToIso, isIsoDate, isWorkday, isoToEpochDay, isoWeekdayIndex } from '@ceo-room/engine';
+import { epochDayToIso, isIsoDate, isWorkday, isoToEpochDay, isoWeekdayIndex } from '@ceo-room/engine';
 import { type ImportReport, type IssueCode, IssueList } from './report';
 import { type PrivacyHit, isPersonalHeader, normaliseHeader, privacyHits } from './privacy';
 import {
@@ -131,12 +131,6 @@ class Ctx {
     };
     if (value !== undefined) out.value = value;
     return out;
-  }
-
-  raw(sheet: ParsedSheet, row: number, column: string): Cell {
-    const idx = sheet.columns.get(column);
-    if (idx === undefined) return null;
-    return this.wb[sheet.spec.name]?.[row - 1]?.[idx] ?? null;
   }
 }
 
@@ -689,7 +683,3 @@ export function validateWorkbook(wb: Workbook, opts: ValidateOptions = {}): Impo
   return analyseWorkbook(wb, opts).report;
 }
 
-/** SimDay of an ISO date for a snapshot (Day 1 = snapshot date). */
-export function simDayOf(snapshotDate: string, iso: string): number {
-  return dateToSimDay(snapshotDate, iso);
-}

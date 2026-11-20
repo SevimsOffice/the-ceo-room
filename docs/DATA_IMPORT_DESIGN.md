@@ -1,6 +1,7 @@
 # Data import design: running the engine on a real company
 
-Status: **Design only (no code).** Implementation: Milestones 4a / 4b / 4c (see ROADMAP).
+Status: **4a part 1 built** (import core, `packages/import`; refinements in §8). Archive Room UI next;
+4b / 4c design only (see ROADMAP).
 
 ## 1. Goal
 
@@ -169,7 +170,7 @@ except the small model additions below):
 | Capacity | `plants`, `lines` | |
 | Workforce | `workforce`, `departments` | head names left empty (no personal data) |
 | History | `finance.history` | |
-| — | `eventCards` | generic, data-driven cards only (cash squeeze, late payment, capacity strain); no NOVARA storyline |
+| — | `eventCards`, `departments` | from the import **profile** (§8): `GENERIC_PROFILE` = data-driven cards only (cash squeeze, operations turnover); `NOVARA_PROFILE` = the sample storyline |
 
 **Model changes required (small, in 4a):** `Company.simulated: boolean` (today a literal `true`),
 `Company.snapshotDate?: string` (UI maps SimDay → real date), `Company.source: 'seed' | 'import'`,
@@ -221,3 +222,41 @@ drawers, brass label holders and a green-shaded reading lamp.
   Sample company data needs no consent.
 - KVKK/GDPR: data minimisation, purpose limitation (simulation only), deletion on request,
   processing record in 4b.
+
+## 8. As built (M4a part 1, `packages/import`)
+
+API and full column list: `packages/import/README.md`. Refinements of §2–§4:
+
+- **Neutral workbook model** (`Record<sheet, Cell[][]>`), no xlsx library in the core; the UI reads
+  and writes the files. Dates are accepted as ISO text, `DD.MM.YYYY` or Excel serials.
+- **Sheets:** a `Plants` sheet (plant_id, name, city, headcount, product_ids) replaces `plant_name` in
+  Capacity and `plant_ids` in Products; an optional **`Demand`** sheet (customer, product, qty_min,
+  qty_max, interval_days, lead_days, next_order_date) mirrors `Customer.demand` so the sample round-
+  trips. Settings gains `overtime_crew_per_line` and `mrp_cover_days`; Customers gains
+  `churn_risk_pct`; Suppliers gains `onboarding_days`; OpenOrders gains progress columns
+  (`units_done`, `minutes_done`, `material_cost_to_date`, `energy_cost_to_date`) and its status is
+  `scheduled | in_production` (shipped-not-invoiced belongs in Receivables); Receivables gains
+  `expected_payment_date`; History gains `closing_cash`. Dropped: Receivables.order_id,
+  Payables.po_id, Workforce.overtime_hours_last_month; Payables use `supplier_id` (cost codes go to
+  FixedCosts).
+- **BOM quantities are whole numbers** (the engine's material units are integers); a fraction is an
+  error (`import.field.notInteger`): use a smaller unit.
+- **History periods** are ranked: the latest `period_end` (≤ snapshot) is period 0, the one before
+  −1, …; the engine's periods are 30-day blocks from Day 1.
+- **Invoices dated after the snapshot** are a warning, not an error (the balance is open either way).
+- **Profiles** supply what a template cannot carry: company id and name key, `periodLengthDays`,
+  `runwayHorizonDays`, `turnoverBpsPerOvertimeHourPerHead`, label keys, departments (head names and
+  notes) and event cards. `GENERIC_PROFILE` departments have no head names (no personal data) and
+  only condition-triggered cards (`cashBelow` one month of fixed costs, `turnoverAbove` max(4%,
+  2 × base)); late payment and capacity strain need new engine triggers (M4).
+- **Engine model:** `Company.simulated: boolean`, `Company.source`, `Company.snapshotDate`, derived
+  `Company.day1Weekday` so the work calendar follows the real weekday of the snapshot date (a Sunday
+  snapshot runs no production on Day 1); optional plain labels `name` / `kindName` beside the i18n
+  keys (`company.imported`, `product.imported`, `material.imported`, `line.imported`,
+  `segment.general`). `selectCalendarDay`, `isForecastDay`, `simDayToDate`, `dateToSimDay`; the
+  morning report has `date` and `forecast`. NOVARA's state is unchanged apart from the new company
+  fields.
+- **Acceptance:** NOVARA → template (tr or en) → validate (0 errors) → `toSeedBundle(NOVARA_PROFILE)`
+  rebuilds the seed bundle byte for byte apart from `source` / `snapshotDate`; the engine's Day-1 and
+  Day-31 (same commands) states hash identically after normalising the company record.
+

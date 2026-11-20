@@ -135,3 +135,21 @@ describe('days and integers', () => {
     expect(trendMark(null)).toBe('');
   });
 });
+
+describe('calendar dates', () => {
+  it('words, figures and month of an ISO date', async () => {
+    const { formatDate, formatDateShort, formatMonthYear, isoDateParts } = await import('./format');
+    expect(formatDate('2027-01-04', 'tr')).toBe('4 Ocak 2027');
+    expect(formatDate('2027-08-31', 'en')).toBe('31 August 2027');
+    expect(formatDate('2027-02-03T10:00:00', 'tr')).toBe('3 Şubat 2027');
+    expect(formatDateShort('2027-01-04', 'tr')).toBe('04.01.2027');
+    expect(formatDateShort('2027-01-04', 'en')).toBe('04/01/2027');
+    expect(formatMonthYear('2027-12-01', 'tr')).toBe('Aralık 2027');
+    expect(formatDate('not a date', 'en')).toBe('not a date');
+    expect(isoDateParts('2027-13-01')).toBeNull();
+  });
+  it('the translator has date formats', async () => {
+    const { createTranslator } = await import('./translate');
+    expect(createTranslator('en').t('ui.header.date', { date: '2027-01-04', weekday: 'Monday' })).toBe('4 January 2027 · Monday');
+  });
+});

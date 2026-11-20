@@ -201,3 +201,45 @@ export function trendMark(delta: number | null): string {
   if (delta === null || delta === 0) return '';
   return delta > 0 ? '▲' : '▼';
 }
+
+// ---- Calendar dates (imported companies: Day 1 = the snapshot date) -------------------------
+
+const MONTHS: Record<Locale, readonly string[]> = {
+  tr: ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'],
+  en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+};
+
+/** Year, month (1–12) and day of an ISO date (`YYYY-MM-DD`, optionally followed by a time); null when it is not one. */
+export function isoDateParts(iso: string): { year: number; month: number; day: number } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/.exec(iso);
+  if (!m) return null;
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return { year: Number(m[1]), month, day };
+}
+
+/** Name of a month (1–12): "Ocak" / "January". */
+export function monthName(month: number, locale: Locale): string {
+  return MONTHS[locale][month - 1] ?? String(month);
+}
+
+/** A calendar date in words: "2027-01-04" → "4 Ocak 2027" (tr) / "4 January 2027" (en). Not a date: as it is. */
+export function formatDate(iso: string, locale: Locale): string {
+  const p = isoDateParts(iso);
+  return p ? `${p.day} ${monthName(p.month, locale)} ${p.year}` : iso;
+}
+
+/** A calendar date in figures: "04.01.2027" (tr) / "04/01/2027" (en, day first). Not a date: as it is. */
+export function formatDateShort(iso: string, locale: Locale): string {
+  const p = isoDateParts(iso);
+  if (!p) return iso;
+  const sep = locale === 'tr' ? '.' : '/';
+  return `${String(p.day).padStart(2, '0')}${sep}${String(p.month).padStart(2, '0')}${sep}${p.year}`;
+}
+
+/** Month and year of a date: "Ocak 2027" / "January 2027". */
+export function formatMonthYear(iso: string, locale: Locale): string {
+  const p = isoDateParts(iso);
+  return p ? `${monthName(p.month, locale)} ${p.year}` : iso;
+}

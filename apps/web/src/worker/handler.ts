@@ -34,6 +34,7 @@ export const WORKSPACE_ID = 'ws_desk';
 export const MAX_ADVANCE_DAYS = 365;
 
 export interface HandlerOptions {
+  /** the company the engine starts with (the sample NOVARA); an `init` may bring another (My company) */
   seed: SeedBundle;
   post: (msg: WorkerResponse) => void;
   /** pause between days of a multi-day advance so the Desk can show each day (default 80 ms) */
@@ -63,7 +64,9 @@ export function storedSave(e: Engine): StoredSave {
 }
 
 export function createHandler(opts: HandlerOptions): Handler {
-  const { seed, post } = opts;
+  const { post } = opts;
+  /** the company being run: the sample, or the imported bundle of the last `init` that carried one */
+  let seed: SeedBundle = opts.seed;
   const dayDelayMs = opts.dayDelayMs ?? 80;
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
@@ -272,6 +275,7 @@ export function createHandler(opts: HandlerOptions): Handler {
       return;
     }
     if (msg.type === 'init') {
+      seed = msg.bundle ?? opts.seed;
       start(msg.save, msg.unreadable === true);
       return;
     }

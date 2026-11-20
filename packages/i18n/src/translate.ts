@@ -2,6 +2,8 @@ import {
   type Locale,
   formatBps,
   formatBpsPoints,
+  formatDate,
+  formatDateShort,
   formatDays,
   formatInt,
   formatMoney,
@@ -49,7 +51,8 @@ export const CATALOGS: Readonly<Record<Locale, Catalog>> = { tr, en };
 /**
  * Placeholder syntax: `{name}` or `{name:format}`. Formats:
  * money, moneyFull, price (= moneyFull), signedMoney, bps, bps1 (one decimal), signedBps, bpsPoints,
- * score, scoreDelta, int, signedInt, day (Gün 46), days (45 gün), customer, supplier, plant,
+ * score, scoreDelta, int, signedInt, day (Gün 46), days (45 gün), date (4 Ocak 2027, from ISO),
+ * dateShort (04.01.2027), customer, supplier, plant,
  * counterparty (customer or supplier), material, family, line, department, code (nested message
  * code), text (as is). Without a format: numbers as grouped integers, strings as they are.
  */
@@ -70,6 +73,8 @@ export const FORMATS = [
   'signedInt',
   'day',
   'days',
+  'date',
+  'dateShort',
   'customer',
   'supplier',
   'plant',
@@ -158,6 +163,10 @@ export function createTranslator(locale: Locale, opts: TranslatorOptions = {}): 
         return Number.isFinite(n) ? formatSimDay(n, locale) : s;
       case 'days':
         return Number.isFinite(n) ? formatDays(n, locale) : s;
+      case 'date':
+        return formatDate(s, locale);
+      case 'dateShort':
+        return formatDateShort(s, locale);
       case 'customer':
         return dir.customers[s] ?? s;
       case 'supplier':

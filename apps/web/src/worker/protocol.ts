@@ -15,6 +15,7 @@ import type {
   OverallHealth,
   Runway,
   SaveGame,
+  SeedBundle,
 } from '@ceo-room/engine';
 import type { Directory } from '@ceo-room/i18n';
 
@@ -147,8 +148,11 @@ export interface DeskThresholds {
 }
 
 export type WorkerRequest =
-  /** start the engine, from a saved game when given */
-  | { type: 'init'; save: StoredSave | null; unreadable?: boolean }
+  /**
+   * start the engine, from a saved game when given. `bundle`: the company to run (My company,
+   * imported); without it, the sample NOVARA. `newGame` and restores keep to this company.
+   */
+  | { type: 'init'; save: StoredSave | null; unreadable?: boolean; bundle?: SeedBundle | null }
   /** throw the game away and start again at Day 1 */
   | { type: 'newGame' }
   | { type: 'dispatch'; command: Command }

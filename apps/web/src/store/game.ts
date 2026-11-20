@@ -3,10 +3,12 @@
  * the desk. Nothing here computes a figure; every number arrives from the worker.
  */
 import { create } from 'zustand';
-import type { CeoCommand, Command, CustomDecisionPreview, Msg, OrderBook, OverallHealth, Runway } from '@ceo-room/engine';
+import type { CeoCommand, Command, CustomDecisionPreview, Msg, OrderBook, OverallHealth, Runway, SeedBundle } from '@ceo-room/engine';
 import type { Directory, Locale } from '@ceo-room/i18n';
 import type { DeskReport, DeskThresholds, DossierView, LedgerSlip, RoomView, WorkerRequest, WorkerResponse } from '../worker/protocol';
-import { backupSave, loadLocale, storeLocale, storeSave } from './storage';
+import type { CompanyId } from '../archive/protocol';
+import type { MyCompanyMeta } from './companyDb';
+import { backupSave, loadActiveCompany, loadLocale, storeActiveCompany, storeLocale, storeSave } from './storage';
 
 /** Auto-advance pace when playing. */
 export const PLAY_INTERVAL_MS = 1500;
@@ -15,6 +17,11 @@ export interface Transport {
   send(msg: WorkerRequest): void;
   /** start a fresh worker with no save (after a fatal error); without it, `newGame` is sent */
   restart?(): void;
+  /**
+   * run a company from its own stored save game: the sample (bundle null) or My company (its
+   * imported bundle). Without it, an `init` is sent to the running worker.
+   */
+  open?(company: CompanyId, bundle: SeedBundle | null): void;
 }
 
 /** A decision command the Decision Room sends (the room waits for its answer). */
@@ -52,6 +59,10 @@ export interface RoomState {
 
 export interface GameState {
   locale: Locale;
+  /** the company on the desk: the sample NOVARA or My company (each with its own save game) */
+  company: CompanyId;
+  /** My company as stored in this browser (null: none imported, or removed) */
+  myCompany: MyCompanyMeta | null;
   phase: 'loading' | 'ready';
   report: DeskReport | null;
   version: number;
@@ -77,8 +88,8 @@ export interface GameState {
   confirmingNewGame: boolean;
   /** telegram ids already shown once (new ones slide in) */
   seenTelegrams: Record<string, true>;
-  /** which room is in front: the Desk or the Decision Room */
-  view: 'desk' | 'room';
+  /** which room is in front: the Desk, the Decision Room or the Archive Room */
+  view: 'desk' | 'room' | 'archive';
   /** the decision open in the Decision Room (its tab shows while this is set) */
   room: RoomState | null;
   /** the ledger entries of the latest decision closed, and whether the carbon copy is open */
@@ -110,6 +121,14 @@ export interface GameState {
   showDesk(): void;
   /** back to the room: its view (and an open memo's preview) is recalculated once, for today */
   showRoom(): void;
+  /** the Archive Room (always reachable; an open decision waits behind its tab) */
+  showArchive(): void;
+  setMyCompany(meta: MyCompanyMeta | null): void;
+  /**
+   * put a company on the desk, from its own save game (`bundle`: My company's imported data; null =
+   * the sample). The engine restarts; nothing of the other company is carried over.
+   */
+  openCompany(company: CompanyId, bundle: SeedBundle | null): void;
   /** put the decision back in its folder: the room and its tab go away */
   closeRoom(): void;
   selectOption(optionId: string): void;
@@ -155,7 +174,11 @@ const stopTimer = (): void => {
  * Decision Room is in front: auto-play waits.
  */
 export const sheetOpen = (s: Pick<GameState, 'dossier' | 'orderBook' | 'confirmingNewGame'> & Partial<Pick<GameState, 'view' | 'ledgerOpen'>>): boolean =>
-  s.dossier !== null || s.orderBook !== null || s.confirmingNewGame || s.view === 'room' || s.ledgerOpen === true;
+  s.dossier !== null || s.orderBook !== null || s.confirmingNewGame || s.view === 'room' || s.view === 'archive' || s.ledgerOpen === true;
+
+/** Whether the company on the desk may be changed now (no day running, no decision being sent). */
+export const canSwitchCompany = (s: Pick<GameState, 'busy' | 'advancePending' | 'room' | 'phase' | 'fatal'>): boolean =>
+  (s.phase === 'ready' || s.fatal !== null) && s.busy === null && !s.advancePending && !s.room?.pending;
 
 /**
  * The room view for the report on the desk, or null while it is being (re)calculated. While the
@@ -215,6 +238,8 @@ const canAdvance = (s: GameState): boolean => s.phase === 'ready' && !s.busy && 
 
 export const useGame = create<GameState>()((set, get) => ({
   locale: loadLocale(),
+  company: loadActiveCompany(),
+  myCompany: null,
   phase: 'loading',
   report: null,
   version: 0,
@@ -292,10 +317,11 @@ export const useGame = create<GameState>()((set, get) => ({
 
   newGame() {
     const crashed = get().fatal !== null;
+    const company = get().company;
     stopTimer();
     // after a failure the save may be what broke: keep it as the backup before clearing it
-    if (crashed) backupSave();
-    storeSave(null);
+    if (crashed) backupSave(company);
+    storeSave(null, company);
     set({
       playing: false,
       dossier: null,
@@ -305,7 +331,7 @@ export const useGame = create<GameState>()((set, get) => ({
       confirmingNewGame: false,
       advancePending: false,
       fatal: null,
-      view: 'desk',
+      view: get().view === 'archive' ? 'archive' : 'desk',
       room: null,
       ledgerSlip: null,
       ledgerOpen: false,
@@ -346,6 +372,42 @@ export const useGame = create<GameState>()((set, get) => ({
     // recalculated once for today's state (the worker re-posts its cached view when nothing changed)
     transport.send({ type: 'openRoom', decisionId: r.decisionId });
     refreshMemo();
+  },
+  showArchive() {
+    const s = get();
+    if (s.view === 'archive' || s.room?.pending) return;
+    set({ view: 'archive', dossier: null, orderBook: null, ledgerOpen: false, confirmingNewGame: false });
+    // the room behind its tab is not recalculated while another room is in front
+    if (s.view === 'room' && s.room) transport.send({ type: 'closeRoom' });
+  },
+  setMyCompany: (meta) => set({ myCompany: meta }),
+  openCompany(company, bundle) {
+    stopTimer();
+    storeActiveCompany(company);
+    set({
+      company,
+      phase: 'loading',
+      report: null,
+      version: 0,
+      runway: null,
+      directory: null,
+      busy: null,
+      playing: false,
+      advancePending: false,
+      fatal: null,
+      notice: null,
+      dossier: null,
+      orderBook: null,
+      confirmingNewGame: false,
+      seenTelegrams: {},
+      view: get().view === 'archive' ? 'archive' : 'desk',
+      room: null,
+      ledgerSlip: null,
+      ledgerOpen: false,
+      slipFor: null,
+    });
+    if (transport.open) transport.open(company, bundle);
+    else transport.send({ type: 'init', save: null, bundle });
   },
   closeRoom() {
     if (!get().room) return;
@@ -432,15 +494,15 @@ export const useGame = create<GameState>()((set, get) => ({
     switch (msg.type) {
       case 'ready':
         // keep the save that could not be restored before the new game's first save overwrites it
-        if (msg.restoreError) backupSave();
+        if (msg.restoreError) backupSave(get().company);
         set({
           phase: 'ready',
           directory: msg.directory,
           currency: msg.currency,
           thresholds: msg.thresholds,
           notice: msg.restoreError ? { key: 'ui.status.restoreFailed', detail: msg.restoreError } : null,
-          // a (re)started engine has no room open and has posted no slip yet
-          view: 'desk',
+          // a (re)started engine has no room open and has posted no slip yet (the Archive Room stays)
+          view: get().view === 'archive' ? 'archive' : 'desk',
           room: null,
           ledgerSlip: null,
           ledgerOpen: false,
@@ -449,7 +511,8 @@ export const useGame = create<GameState>()((set, get) => ({
         return;
       case 'report': {
         const s = get();
-        if (msg.version < s.version) return;
+        // nothing is shown before the engine of the company on the desk has said `ready`
+        if (msg.version < s.version || s.phase !== 'ready') return;
         const open = s.orderBook !== null;
         set({ report: msg.report, version: msg.version });
         // keep an open sheet live; the dossier only between advances (it is re-read at busy: null)
@@ -463,7 +526,8 @@ export const useGame = create<GameState>()((set, get) => ({
         if (msg.version === get().version) set({ runway: { version: msg.version, runway: msg.runway, health: msg.health } });
         return;
       case 'save':
-        storeSave(msg.save);
+        // only the engine that answered `ready` for this company writes its save (never another's)
+        if (get().phase === 'ready') storeSave(msg.save, get().company);
         return;
       case 'busy': {
         if (msg.busy) {

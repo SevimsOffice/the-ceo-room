@@ -55,6 +55,16 @@ updated, a done-vs-outstanding report, and a stop for approval.
   pass-through bound lives in `COMMAND_LIMITS.maxPassThroughBps`; no raw ids in the carbon copy.
 - Room money cells are printed in millions (unit in the row header) so +7 / +30 / +90 fit a note.
 
+## Notes from Milestone 4a (part 1: import core)
+
+- `packages/import` (pure): template export (tr/en, empty or NOVARA example), three-level validation
+  with the design's JSON report, `toSeedBundle` with `NOVARA_PROFILE` / `GENERIC_PROFILE`,
+  `TemplateDataSource`. API in `packages/import/README.md`, refinements in DATA_IMPORT_DESIGN §8,
+  ADR-0008.
+- Engine: company source / snapshot date / Day-1 weekday, `selectCalendarDay`, forecast flag, plain
+  labels for imported records. NOVARA round-trips through the template with identical state hashes.
+- Part 2: the Archive Room UI (xlsx read/write, report on paper, browse, company switch, IndexedDB).
+
 ## Out of scope for now
 
 Real data import, multi-tenant UI, accounts/auth, mobile layout beyond basic usability,

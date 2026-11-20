@@ -110,6 +110,8 @@ const DERIVED_DEFAULTS: Record<string, string> = {
 /** Optional columns where blank simply means "none" (no default to report). */
 const BLANK_MEANS_NONE = new Set(['OpenOrders.list_unit_price', 'OpenPurchaseOrders.for_order_id', 'Capacity.repair_due_date', 'History.closing_cash']);
 
+const PROGRESS = new Set(['OpenOrders.minutes_done', 'OpenOrders.material_cost_to_date', 'OpenOrders.energy_cost_to_date']);
+
 /** Onboarding days assumed for a supplier not yet bought from (estimated). */
 export const DEFAULT_ONBOARDING_DAYS = 7;
 
@@ -429,7 +431,7 @@ function crossChecks(ctx: Ctx, snapshot: string | null): void {
     after(S.OpenOrders, r, 'order_date');
     const plant = s(r, 'plant_id');
     const product = s(r, 'product_id');
-    if (plant !== null && product !== null && products.has(product) && madeIn.has(product) && !madeIn.get(product)!.has(plant)) {
+    if (plant !== null && product !== null && products.has(product) && ids.get('Plants')!.has(plant) && !madeIn.get(product)?.has(plant)) {
       ctx.issues.error('import.order.plantProduct', ctx.at(S.OpenOrders, r.row, 'plant_id', plant), { plantId: plant, productId: product });
     }
     const qty = n(r, 'qty');
@@ -607,7 +609,8 @@ function applyDefaults(ctx: Ctx): void {
           }
         } else if (fixed) {
           ctx.issues.info(fixed.estimated ? 'import.default.estimated' : 'import.default.applied', ctx.at(sheet, r.row, c.key), { default: fixed.display });
-        } else if (derived) {
+        } else if (derived && !(PROGRESS.has(k) && r.values.units_done === 0)) {
+          // (an order not yet started has no progress figures to estimate: no note)
           ctx.issues.info('import.default.derived', ctx.at(sheet, r.row, c.key), { source: derived });
         }
       }

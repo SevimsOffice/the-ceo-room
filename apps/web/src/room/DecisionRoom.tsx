@@ -56,6 +56,8 @@ function FigureRow({ label, testId, children }: { label: string; testId: string;
 function SituationMemo({ v }: { v: RoomView }) {
   const t = useT();
   const urgent = v.status === 'open' && v.daysLeft <= 1;
+  // My company after Day 1: the room's figures are a forecast from the imported snapshot
+  const forecast = useGame((s) => (s.report?.forecast ? s.report.company.snapshotDate : null));
   return (
     <section aria-labelledby="situation-title" className="paper on-paper relative mt-3 px-4 pb-2.5 pt-3" style={{ transform: 'rotate(.5deg)', boxShadow: '0 14px 26px rgba(0,0,0,.6)' }} data-testid="situation">
       <PaperNoise id="paper-situation" />
@@ -64,6 +66,11 @@ function SituationMemo({ v }: { v: RoomView }) {
           {t.t('ui.room.situation')}
         </h2>
         <div className="mt-1.5 h-[5px] border-b border-t-2 border-ink" />
+        {forecast && (
+          <p className="m-0 mt-1.5 border-2 border-oxblood-ink px-1.5 py-0.5 font-type text-label font-bold leading-[1.25] text-oxblood-ink" data-testid="room-forecast">
+            {t.t('ui.room.forecast', { snapshot: forecast })}
+          </p>
+        )}
         <p className="m-0 mt-1.5 font-type text-label leading-[1.25] text-[#3a2c1c]" data-testid="situation-text">
           {t.msg(v.situation)}
         </p>

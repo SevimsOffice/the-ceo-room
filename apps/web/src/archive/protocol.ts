@@ -6,7 +6,7 @@
 import type { SeedBundle } from '@ceo-room/engine';
 import type { Locale } from '@ceo-room/i18n';
 import type { ColumnType, ImportReport, SheetName, UnitCode, Value, Workbook } from '@ceo-room/import';
-import type { ReadFailure } from '../xlsx/xlsx';
+import type { ReadFailure } from '../xlsx/limits';
 
 /** Which company: the built-in sample (NOVARA) or the CEO's own, imported from Excel. */
 export type CompanyId = 'sample' | 'mine';

@@ -11,14 +11,9 @@
 import writeXlsxFile from 'write-excel-file/universal';
 import readXlsxFile from 'read-excel-file/universal';
 import { type Cell, FIRST_DATA_ROW, type Row, TEMPLATE, type Workbook } from '@ceo-room/import';
+import { MAX_FILE_BYTES, type ReadFailure } from './limits';
 
-/** Largest file the Archive Room reads (bytes). The template's 5 000 rows per sheet fit well below. */
-export const MAX_FILE_BYTES = 8 * 1024 * 1024;
-
-export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-/** Why a file could not be read as a workbook (i18n: `ui.archive.read.<code>`). */
-export type ReadFailure = 'tooLarge' | 'empty' | 'notXlsx' | 'corrupt';
+export { MAX_FILE_BYTES, XLSX_MIME, type ReadFailure } from './limits';
 
 export class XlsxReadError extends Error {
   constructor(readonly code: ReadFailure, detail?: string) {

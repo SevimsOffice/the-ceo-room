@@ -17,6 +17,7 @@ import { TimeDial } from './TimeDial';
 import { TypedReport } from './TypedReport';
 import { LedgerCarbon } from './LedgerCarbon';
 import { DecisionRoom } from '../room/DecisionRoom';
+import { ArchiveRoom } from '../archive/ArchiveRoom';
 
 /**
  * Where focus goes on the Desk when the Decision Room on `decisionId` has closed (its controls are
@@ -43,6 +44,7 @@ export function Desk() {
   const t = useT();
   const loading = useGame((s) => s.report === null);
   const inRoom = useGame((s) => s.view === 'room' && s.room !== null);
+  const inArchive = useGame((s) => s.view === 'archive');
   const failed = useGame((s) => s.fatal !== null);
   const newGame = useGame((s) => s.newGame);
   const confirming = useGame((s) => s.confirmingNewGame);
@@ -62,13 +64,16 @@ export function Desk() {
   }, [inRoom, roomId]);
 
   return (
-    <div ref={root} className="relative h-[900px] w-[1440px] overflow-hidden bg-desk" data-testid="desk" data-view={inRoom ? 'room' : 'desk'}>
+    <div ref={root} className="relative h-[900px] w-[1440px] overflow-hidden bg-desk" data-testid="desk" data-view={inArchive ? 'archive' : inRoom ? 'room' : 'desk'}>
       <WoodGrain />
       <DeskPlanks />
       <LampLight />
       <Header />
       <main>
-        {loading ? (
+        {inArchive ? (
+          // the Archive Room works while the engine (re)starts: switching companies happens here
+          <ArchiveRoom />
+        ) : loading ? (
           !failed && <p className="absolute left-0 top-[420px] w-full text-center font-hand text-3xl font-semibold italic text-cream-2" data-testid="loading">
             {t.t('ui.status.loading')}
           </p>
@@ -94,8 +99,8 @@ export function Desk() {
       </main>
       <Vignette />
       <FilmGrain />
-      {!inRoom && <DossierSheet />}
-      {!inRoom && <OrderBookSheet />}
+      {!inRoom && !inArchive && <DossierSheet />}
+      {!inRoom && !inArchive && <OrderBookSheet />}
       {confirming && <ConfirmNewGame onCancel={cancelNewGame} onConfirm={newGame} />}
       <FatalSlip />
     </div>

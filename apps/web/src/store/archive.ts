@@ -8,7 +8,7 @@ import { createTranslator } from '@ceo-room/i18n';
 import { type ImportReport, type SheetName, type Workbook, canImport } from '@ceo-room/import';
 import type { ArchiveTransport } from '../archive/client';
 import type { BrowseBook, CompanyId, DownloadKind } from '../archive/protocol';
-import { MAX_FILE_BYTES, type ReadFailure, XLSX_MIME } from '../xlsx/xlsx';
+import { MAX_FILE_BYTES, type ReadFailure, XLSX_MIME } from '../xlsx/limits';
 import { type CompanyDb, type MyCompanyMeta, memoryCompanyDb } from './companyDb';
 import { canSwitchCompany, useGame } from './game';
 import { clearSaves } from './storage';

@@ -38,6 +38,9 @@ export function TypedReport() {
   if (!report) return null;
   const lines = reportLines(t, report, live, thresholds);
   const weekday = t.t(report.weekdayCode);
+  const imported = report.company.source === 'import';
+  const snapshot = report.company.snapshotDate;
+  const stamp = !imported ? 'ui.report.stamp' : report.forecast ? 'ui.report.stamp.forecast' : 'ui.report.stamp.imported';
 
   return (
     <article
@@ -55,22 +58,30 @@ export function TypedReport() {
       <div className="relative">
         <div className="flex items-start justify-between">
           <div>
-            <div className="font-display text-base font-bold uppercase tracking-[.22em]">{t.t(report.company.nameKey)}</div>
+            <div className="font-display text-base font-bold uppercase tracking-[.22em]" data-testid="report-company">
+              {report.company.name ?? t.t(report.company.nameKey)}
+            </div>
             <div className="mt-0.5 font-type text-label text-ink-muted">{report.company.city}</div>
           </div>
           <div
             className="border-[3px] border-double border-oxblood-ink px-2.5 py-1 font-type text-label font-bold uppercase tracking-[.1em] text-oxblood-ink"
             style={{ transform: 'rotate(3deg)' }}
+            data-testid="report-stamp"
           >
-            {t.t('ui.report.stamp')}
+            {t.t(stamp)}
           </div>
         </div>
         <h2 id="report-title" tabIndex={-1} className="m-0 mt-3 font-display text-[36px] font-extrabold leading-[1.05]">
           {t.t('ui.report.title')}
         </h2>
         <div className="mt-1.5 font-type text-label text-ink-muted" data-testid="report-dateline">
-          {t.t('ui.report.dateline', { day: report.day, weekday })}
+          {report.date ? t.t('ui.report.dateline.date', { date: report.date, weekday }) : t.t('ui.report.dateline', { day: report.day, weekday })}
         </div>
+        {report.forecast && snapshot && (
+          <div className="mt-1 font-type text-label font-bold text-oxblood-ink" data-testid="report-forecast">
+            {t.t('ui.report.forecast', { snapshot })}
+          </div>
+        )}
         <div className="mt-3 h-1.5 border-b border-t-[3px] border-ink" />
         <div>
           {lines.map((line) =>
@@ -92,7 +103,7 @@ export function TypedReport() {
           )}
         </div>
         <p className="m-0 mt-3 max-w-[420px] font-hand text-[19px] font-semibold italic leading-tight" style={{ color: '#5a2a14' }}>
-          {reportNote(t, report.developments.length)}
+          {reportNote(t, report.developments.length, imported ? (report.forecast ? 'forecast' : 'imported') : 'simulated')}
         </p>
       </div>
       <div className="pointer-events-none absolute bottom-6 right-[34px] h-[84px] w-[84px] rounded-full border-[6px]" style={{ borderColor: 'rgba(110,70,30,.14)' }} />

@@ -152,8 +152,9 @@ export function reportLines(
 }
 
 /** The note at the foot of the report. */
-export function reportNote(t: Translator, unread: number): string {
-  return unread === 0 ? t.t('ui.report.note.none') : t.plural('ui.report.note', unread);
+export function reportNote(t: Translator, unread: number, kind: 'simulated' | 'imported' | 'forecast' = 'simulated'): string {
+  const key = kind === 'simulated' ? 'ui.report.note' : `ui.report.note.${kind}`;
+  return unread === 0 ? t.t(`${key}.none`) : t.plural(key, unread);
 }
 
 /** "dev-0004" → "0004": the form number on a telegram. */

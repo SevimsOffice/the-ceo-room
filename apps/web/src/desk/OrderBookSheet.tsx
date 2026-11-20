@@ -25,7 +25,9 @@ function Cmp<T extends number | null>({ c, fmt, testId }: { c: Compared<T>; fmt:
 function Row({ o, t }: { o: OrderBookLine; t: Translator }) {
   const directory = useGame((s) => s.directory);
   const customer = directory?.customers[o.customerId] ?? o.customerId;
-  const product = directory?.families[o.familyId] ? t.t(directory.families[o.familyId]!) : o.familyId;
+  // an i18n key (sample) or an imported company's plain name
+  const family = directory?.families[o.familyId];
+  const product = family ? (t.has(family) ? t.t(family) : family) : o.familyId;
   const day = (d: number | null) => (d === null ? t.t('ui.figure.none') : formatSimDay(d, t.locale));
   return (
     <tr className="border-b border-dotted border-[rgba(60,40,20,.45)] align-top" data-testid="order-row" data-order={o.orderId} data-differs={o.differs}>

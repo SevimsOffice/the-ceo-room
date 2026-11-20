@@ -29,7 +29,8 @@ can mutate state.
 |---|---|---|
 | `packages/engine` | Domain model, systems, commands, events, rules, projections, selectors, RNG | nothing (no DOM, no React, no LLM, no I/O) |
 | `packages/i18n` | `tr`/`en` catalogues (every engine code + `ui.*`), `createTranslator` (`{param:format}` placeholders, id → name directory), formatters from engine units (`formatMoney`, `formatBps`, `formatScoreDelta`, `formatDays`, …) | none (tests use engine + seed-data) |
-| `apps/web` | Rooms, physical-object components, Zustand store, engine Web Worker, localStorage save | engine (worker; types only on the main thread), i18n |
+| `packages/import` | Excel template import, pure (ADR-0008): template export, validation report, `toSeedBundle`, profiles, `TemplateDataSource` on a neutral workbook model | engine, i18n, seed-data |
+| `apps/web` | Rooms (Desk, Decision Room, Archive Room), physical-object components, Zustand stores, engine and archive Web Workers, localStorage saves, IndexedDB company store | engine, import (workers; types and pure helpers on the main thread), i18n |
 | `scripts/` | `generate-seed.ts` (fixed seed → `data/seed/*.json`) | engine types |
 
 Monorepo via pnpm workspaces (ADR-0003). TypeScript strict across all packages.
@@ -64,6 +65,19 @@ interface Engine {
 V1 is fully in-browser. Save game = `{ seedVersion, rngSeed, commandLog }` in localStorage.
 Loading replays the command log (deterministic), so saves stay small and verifiable. Periodic
 state snapshots can be added if replay gets slow. Supabase later, behind the same interface.
+
+**Two companies (M4a).** The sample NOVARA and My company (imported from Excel) each have their own
+save game: `ceo-room.save.v1` (+ `.bak`) and `ceo-room.save.mine.v1` (+ `.bak`); `ceo-room.company`
+says which is on the desk. A save holds only `seedVersion`, so My company's bundle is stored beside
+it in **IndexedDB** (database `ceo-room`, store `company`): `mine.meta` (file name, imported at by the
+browser clock, snapshot date, company name, inspection counts, profile) and `mine.data` (the
+workbook and the `SeedBundle` built from it), written and removed in one transaction. IndexedDB
+rather than localStorage because a workbook of up to 18 × 5 000 rows runs to megabytes (past
+localStorage's ~5 MB of UTF-16 text), structured objects need no JSON, and writes are asynchronous.
+Nothing is ever sent over the network (an e2e test intercepts every request). On start the store
+resumes the company that was on the desk (`store/resume.ts`); if My company is no longer stored the
+sample opens. Switching companies restarts the engine worker from that company's own save; removing
+My company deletes both records and its saves.
 
 ## 5. UI layer
 
@@ -150,6 +164,21 @@ Integration tests assert steps 2–8 and that each option leads to a different s
   aria-disabled rather than disabled so focus is kept (and found again after the figures are
   recalculated); focus moves to the options on opening and to
   the Desk (carbon copy, else the decision's telegram or folder, else the report) on closing.
+- **Archive Room (M4a)**: `apps/web/src/archive/`. A second worker (`archive.worker.ts`, started on
+  first use) reads and writes xlsx with **read-excel-file** / **write-excel-file** (MIT, maintained,
+  fflate-based, their DOM-free "universal" builds) through `src/xlsx/xlsx.ts` (Workbook ⇄ bytes; ISO
+  dates in template date columns ⇄ real Excel dates). Requests: `template {lang, example}`,
+  `inspect {bytes}` (read + `validateWorkbook`; unreadable files answer `notXlsx | corrupt | empty |
+  tooLarge`), `build {workbook}` (`toSeedBundle`: NOVARA's storyline profile when the file is the
+  sample's own data, else `GENERIC_PROFILE`), `reportFile {report, lang, xlsx|csv}` (`reportRows`)
+  and `browse {company, workbook}` (`analyseWorkbook` → the drawers' tables; the sample is read
+  through its own filled template). The engine worker's `init` takes an optional `bundle`: My
+  company. The store (`store/archive.ts`) keeps the inspection, the drawers, the downloads and the
+  confirmations (replace, remove); `useGame` keeps `company`, `myCompany` and `view: 'desk' | 'room' |
+  'archive'` (the Archive Room tab is always there; auto-play waits while it is in front). In My
+  company mode the header, calendar and report print real dates (`selectCalendarDay` / `report.date`)
+  and every day after Day 1 carries a "Tahmin / Forecast" label (header, calendar, report, Decision
+  Room).
 - **Ledger slip (M3)**: after every state change the worker reads the new part of the ledger for
   `DecisionResolved` and, when a newer decision closed (approved, rejected, expired, or restored
   from a save), posts `ledgerSlip`: that line and every line it caused (by command id or event

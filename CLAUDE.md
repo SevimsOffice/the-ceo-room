@@ -4,7 +4,7 @@ Source of truth: `CEO_ROOM_CLAUDE_CODE_PROMPT.md` (product spec). Visual referen
 Architecture and model: `docs/`. Decisions: `docs/adr/`. When these disagree, the spec wins
 unless an accepted ADR says otherwise.
 
-**Current phase:** Milestone 4a (Archive Room v1: Excel import in the browser). Milestones 0–3 approved; Phase 0 decisions in `docs/OPEN_QUESTIONS.md`.
+**Current phase:** Milestone 4a (Excel import + Archive Room) done, awaiting approval. Milestones 0–3 approved; Phase 0 decisions in `docs/OPEN_QUESTIONS.md`.
 
 ## Principles (non-negotiable)
 
@@ -15,7 +15,8 @@ unless an accepted ADR says otherwise.
    in UI, no "display-only" numbers.
 3. **Done = interactive and state-changing.** No fake buttons, no static mock-ups shipped as features.
 4. **Swappable data.** The engine loads through `CompanyDataSource`. V1 = `SeedDataSource`
-   (`data/seed/*.json`). No real-data import yet.
+   (`data/seed/*.json`); M4a adds Excel import in the browser (`TemplateDataSource`, Archive Room),
+   kept in the browser only (IndexedDB), never sent anywhere.
 5. **i18n from day one.** `tr` and `en`; no user-facing string literals in components. Currency TRY,
    configurable.
 6. **`workspaceId` on every record.** No tenancy UI.

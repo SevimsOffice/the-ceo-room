@@ -26,7 +26,7 @@ export function UploadBlotter() {
   return (
     <section
       aria-labelledby="upload-title"
-      className="absolute left-[476px] top-[196px] z-10 h-[246px] w-[460px] rounded-[6px] p-[10px]"
+      className="absolute left-[476px] top-[206px] z-10 h-[238px] w-[460px] rounded-[6px] p-[10px]"
       style={{ background: 'linear-gradient(135deg,#5a1c1c,#3f1212)', boxShadow: '0 18px 30px rgba(0,0,0,.65)' }}
       onDragOver={(e) => {
         e.preventDefault();

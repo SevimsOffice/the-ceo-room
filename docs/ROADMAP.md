@@ -10,7 +10,7 @@ updated, a done-vs-outstanding report, and a stop for approval.
 | 2 | **The Desk UI** *(done)* | React/Vite/Tailwind app renders morning report, telegrams, pending folders, capacity + projected-runway gauges, overall health, employee turnover, calendar, advance-day bell + week/month/pause brass dial, all from selectors; TR default with remembered TR/EN switch; self-hosted fonts; desktop ≥1280px scaled scene, smaller screens show a "best viewed on desktop" note; localStorage save/load; looks like `design/`. Order figures show live values with the plan alongside where they differ. Engine runs in a Web Worker (no UI freeze). Deployed to GitHub Pages by GitHub Actions. |
 | 3 | **Decision Room** *(done)* | Opens from a telegram/folder; situation, supporting figures, options with today vs +30 deltas from `project()` incl. a people row (overtime/turnover); CFO/COO notes signed with fictional names ("Ayşe Kaya — CFO"); approve (seal), reject, request analysis, custom decision; state changes and ledger entries visible on the Desk. Playwright journey. |
 | 4 | **More workflows & departments** | All 8 event cards live; breakdown, export, turnover, late payment, cash squeeze flows; department data complete. Negotiation outcomes with seeded uncertainty (success probability, range of settled prices). Breakdown re-plans promise dates. Probabilistic churn and lost-demand modelling. Forfeited deposits and other one-off losses in margin/P&L metrics. |
-| 4a | **Real data: Excel import (local)** *(current; taken before 4 at the user's request)* | Per `docs/DATA_IMPORT_DESIGN.md`: downloadable xlsx template (one sheet per entity, TR/EN), in-browser validation (structure, field, cross-sheet, privacy guard) with error report, `TemplateDataSource` → `SeedBundle`, Day 1 = snapshot date and time = forecast, Archive Room (Arşiv Odası) with browse, data sources register and NOVARA / My company switch. Data stays in the browser. Same file → same state hash. |
+| 4a | **Real data: Excel import (local)** *(done, awaiting approval; taken before 4 at the user's request)* | Per `docs/DATA_IMPORT_DESIGN.md`: downloadable xlsx template (one sheet per entity, TR/EN), in-browser validation (structure, field, cross-sheet, privacy guard) with error report, `TemplateDataSource` → `SeedBundle`, Day 1 = snapshot date and time = forecast, Archive Room (Arşiv Odası) with browse, data sources register and NOVARA / My company switch. Data stays in the browser. Same file → same state hash. |
 | 4b | **Real data: Supabase** | Auth, `workspace_id` + Row Level Security per workspace, roles, import audit log, EU hosting, export/delete workspace; saves and imports synced. |
 | 4c | **Real data: connectors** | Read-only ERP adapters (Logo, Netsis, Mikro) and bank API connectors as `CompanyDataSource`s through the same validation; scheduled refresh. LLM use of imported data only with explicit per-workspace consent. |
 | 5 | **Scenario Study** | Current course vs A vs B; 30/90/180/365 projections; printed-style charts. |
@@ -64,6 +64,29 @@ updated, a done-vs-outstanding report, and a stop for approval.
 - Engine: company source / snapshot date / Day-1 weekday, `selectCalendarDay`, forecast flag, plain
   labels for imported records. NOVARA round-trips through the template with identical state hashes.
 - Part 2: the Archive Room UI (xlsx read/write, report on paper, browse, company switch, IndexedDB).
+
+## Notes from Milestone 4a (part 2: the Archive Room)
+
+- **Archive Room (Arşiv Odası)**, a header tab always there: oak card-index cabinet (a drawer per
+  sheet, ledger tables with search, read-only; NOVARA browsed from its own template with day
+  numbers, My company with real dates), template pigeonhole (filled NOVARA example / empty, in the
+  UI language, written in the browser), upload blotter (drop or a real file input), typed
+  inspection report (red / amber / pencil stamps, sheet · Excel cell · column · problem, counts,
+  download as xlsx or csv; Import only with zero errors), register of data sources, brass company
+  switch, remove-my-data, privacy notice.
+- **xlsx**: read-excel-file + write-excel-file (MIT, maintained, fflate-based, DOM-free builds run in
+  a worker; the npm `xlsx` 0.18 line was avoided). Files over 8 MB, empty, non-zip (xls, csv, …) and
+  damaged files get a plain message.
+- **Storage**: My company's workbook + bundle in IndexedDB (meta and data records), separate save
+  games per company in localStorage, restored on reload; nothing goes over the network (e2e test).
+- **My company**: Day 1 = snapshot date on the header, calendar leaf and report; every later day is
+  labelled Tahmin / Forecast (header, calendar, report, Decision Room). NOVARA's own template
+  imported as My company keeps the sample's storyline and runs identically (unit + e2e acceptance);
+  other companies get `GENERIC_PROFILE`.
+- Known gaps: telegrams, dossiers and the Decision Room still name days as "Gün N" (only the header,
+  calendar and report show real dates); no Excel dropdowns (data validation) in the template; the
+  drawers show at most 250 records at a time (search narrows); Turkish CSV opens best via Excel's
+  import (comma-separated, UTF-8 BOM).
 
 ## Out of scope for now
 

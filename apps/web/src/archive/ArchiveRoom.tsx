@@ -143,7 +143,7 @@ export function ArchiveRoom() {
   }, [company, locale, importedAt, loadBrowse]);
 
   return (
-    <div data-testid="archive-room">
+    <div className="absolute left-0 top-0 h-[900px] w-[1440px]" data-testid="archive-room">
       <Backdrop />
       <GreenLamp />
       <FilingCabinet />

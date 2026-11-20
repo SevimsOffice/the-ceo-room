@@ -11,6 +11,8 @@ interface LeafFace {
   /** the strip on top: "GÜN" (sample) or the month and year (My company) */
   label: string;
   forecast: boolean;
+  /** a real date (My company): the strip holds the month and year */
+  dated: boolean;
   key: number;
 }
 
@@ -22,7 +24,7 @@ function Leaf({ face, className = '', testId }: { face: LeafFace; className?: st
       style={{ background: '#efe5c9', boxShadow: '0 12px 20px rgba(0,0,0,.55)', transform: 'rotate(1.5deg)' }}
       data-testid={testId}
     >
-      <div className="flex h-[30px] items-center justify-center whitespace-nowrap font-type text-label font-bold uppercase tracking-[.2em]" style={{ background: '#6a1c1f', color: '#efe0c2' }} data-testid={testId ? `${testId}-label` : undefined}>
+      <div className={`flex h-[30px] items-center justify-center whitespace-nowrap font-type text-label font-bold uppercase ${face.dated ? 'tracking-[.04em]' : 'tracking-[.3em]'}`} style={{ background: '#6a1c1f', color: '#efe0c2' }} data-testid={testId ? `${testId}-label` : undefined}>
         {face.label}
       </div>
       <div
@@ -64,9 +66,9 @@ export function CalendarLeaf() {
         const weekday = t.t(report.weekdayCode);
         const parts = report.date ? isoDateParts(report.date) : null;
         if (report.date && parts) {
-          return { big: formatInt(parts.day, t.locale), weekday, label: formatMonthYear(report.date, t.locale), forecast: report.forecast, key: report.day };
+          return { big: formatInt(parts.day, t.locale), weekday, label: formatMonthYear(report.date, t.locale), forecast: report.forecast, dated: true, key: report.day };
         }
-        return { big: formatInt(report.day, t.locale), weekday, label: t.t('ui.calendar.day'), forecast: false, key: report.day };
+        return { big: formatInt(report.day, t.locale), weekday, label: t.t('ui.calendar.day'), forecast: false, dated: false, key: report.day };
       })()
     : null;
 

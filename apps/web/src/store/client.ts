@@ -1,7 +1,8 @@
 /** Starts the engine worker and connects it to the Desk store; opens the company that was on the desk. */
 import type { SeedBundle } from '@ceo-room/engine';
 import { setTransport, useGame } from './game';
-import { loadSave, storeActiveCompany } from './storage';
+import { loadSave } from './storage';
+import { resumeCompany } from './resume';
 import { type CompanyDb, indexedDbCompanyDb, memoryCompanyDb } from './companyDb';
 import { setArchiveServices } from './archive';
 import { workerArchiveTransport } from '../archive/client';
@@ -39,20 +40,15 @@ function spawn(fresh: boolean): void {
 
 /** Open the company that was on the desk: My company needs its bundle from the browser's database. */
 async function boot(db: CompanyDb): Promise<void> {
-  const active = useGame.getState().company;
-  if (active === 'sample') spawn(false);
-  const meta = await db.loadMeta().catch(() => null);
-  useGame.getState().setMyCompany(meta);
-  if (active === 'sample') return;
-  const data = meta ? await db.loadData().catch(() => null) : null;
-  if (data) {
-    current = { company: 'mine', bundle: data.bundle };
-  } else {
-    // My company is no longer stored (site data cleared): the sample is put back on the desk
-    storeActiveCompany('sample');
-    useGame.setState({ company: 'sample' });
-    current = { company: 'sample', bundle: null };
-  }
+  // the sample needs nothing from the database: it starts at once
+  const sample = useGame.getState().company === 'sample';
+  if (sample) spawn(false);
+  const r = await resumeCompany(db);
+  useGame.getState().setMyCompany(r.meta);
+  if (sample) return;
+  // My company may be gone (site data cleared): then the sample is put back on the desk
+  if (r.lost) useGame.setState({ company: 'sample' });
+  current = { company: r.company, bundle: r.bundle };
   spawn(false);
 }
 

@@ -98,6 +98,10 @@ export function getCompanyDb(): CompanyDb {
   return services.db;
 }
 
+/** A call to the archive worker that never throws: a broken worker answers `failed`. */
+const ask = (req: Parameters<ArchiveTransport['call']>[0]): ReturnType<ArchiveTransport['call']> =>
+  services.archive.call(req).catch((err: unknown) => ({ type: 'failed' as const, requestId: 0, detail: err instanceof Error ? err.message : String(err) }));
+
 let inspectGen = 0;
 
 const browseKey = (company: CompanyId, locale: string, mine: MyCompanyMeta | null): string => `${company}:${locale}:${company === 'mine' ? (mine?.importedAt ?? '') : ''}`;
@@ -128,8 +132,7 @@ export const useArchive = create<ArchiveState>()((set, get) => ({
     set({ inspection: { status: 'reading', fileName } });
     let r: Awaited<ReturnType<ArchiveTransport['call']>>;
     try {
-      const bytes = await file.arrayBuffer();
-      r = await services.archive.call({ type: 'inspect', bytes });
+      r = await ask({ type: 'inspect', bytes: await file.arrayBuffer() });
     } catch {
       r = { type: 'failed', requestId: 0, detail: 'read' };
     }
@@ -154,7 +157,7 @@ export const useArchive = create<ArchiveState>()((set, get) => ({
     if (i.status !== 'ready' || i.imported || !canImport(i.report) || get().pending) return;
     if (!canSwitchCompany(useGame.getState())) return set({ note: { code: 'ui.archive.note.clockRunning', params: {}, tone: 'bad' } });
     set({ pending: 'import', note: null });
-    const r = await services.archive.call({ type: 'build', workbook: i.workbook });
+    const r = await ask({ type: 'build', workbook: i.workbook });
     if (r.type !== 'built' || !r.ok) {
       set({ pending: null, note: { code: 'ui.archive.note.importFailed', params: {}, tone: 'bad' }, ...(r.type === 'built' ? { inspection: { ...i, report: r.report } } : {}) });
       return;
@@ -248,10 +251,10 @@ export const useArchive = create<ArchiveState>()((set, get) => ({
     set({ downloading: kind });
     try {
       if (kind === 'example' || kind === 'empty') {
-        r = await services.archive.call({ type: 'template', lang: locale, example: kind === 'example' });
+        r = await ask({ type: 'template', lang: locale, example: kind === 'example' });
       } else {
         if (i.status !== 'ready') return;
-        r = await services.archive.call({ type: 'reportFile', report: i.report, lang: locale, format: kind === 'reportCsv' ? 'csv' : 'xlsx' });
+        r = await ask({ type: 'reportFile', report: i.report, lang: locale, format: kind === 'reportCsv' ? 'csv' : 'xlsx' });
       }
       if (r.type === 'file') {
         const file = kind === 'reportCsv' ? r.file : new Blob([r.file], { type: XLSX_MIME });
@@ -278,7 +281,7 @@ export const useArchive = create<ArchiveState>()((set, get) => ({
     set({ browse: { key, status: 'loading', book: null } });
     let workbook: Workbook | null = null;
     if (g.company === 'mine') workbook = (await services.db.loadData().catch(() => null))?.workbook ?? null;
-    const r = g.company === 'mine' && !workbook ? null : await services.archive.call({ type: 'browse', company: g.company, workbook, lang: g.locale });
+    const r = g.company === 'mine' && !workbook ? null : await ask({ type: 'browse', company: g.company, workbook, lang: g.locale });
     if (get().browse?.key !== key) return;
     set({ browse: r?.type === 'browsed' ? { key, status: 'ready', book: r.book } : { key, status: 'failed', book: null } });
   },

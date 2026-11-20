@@ -286,3 +286,33 @@ describe('engine worker handler', () => {
     expect(ofType(out, 'report')).toHaveLength(1);
   });
 });
+
+describe('My company (an imported bundle)', () => {
+  it('init with a bundle runs that company: real dates, its own save; newGame and restore stay on it', async () => {
+    const { exportTemplate } = await import('@ceo-room/import');
+    const { buildCompany } = await import('../archive/handler');
+    const built = buildCompany(exportTemplate(seed, { lang: 'tr', example: true }));
+    if (!built.ok) throw new Error('not built');
+    const { h, out } = setup();
+    await h.handle({ type: 'init', save: null, bundle: built.bundle });
+    const first = ofType(out, 'report')[0]!.report;
+    expect(first).toMatchObject({ day: 1, date: '2027-01-04', forecast: false, company: { source: 'import', name: 'NOVARA Sanayi' } });
+    await h.handle({ type: 'advance', days: 2 });
+    const save = ofType(out, 'save').at(-1)!.save;
+    expect(ofType(out, 'report').at(-1)!.report).toMatchObject({ day: 3, date: '2027-01-06', forecast: true });
+
+    // a restart from that save (same bundle) comes back to Day 3
+    out.length = 0;
+    await h.handle({ type: 'init', save, bundle: built.bundle });
+    expect(ofType(out, 'ready')[0]!.restored).toBe(true);
+    expect(ofType(out, 'report')[0]!.report.day).toBe(3);
+    // a new game keeps the company
+    out.length = 0;
+    await h.handle({ type: 'newGame' });
+    expect(ofType(out, 'report')[0]!.report).toMatchObject({ day: 1, date: '2027-01-04' });
+    // and an init without a bundle is the sample again
+    out.length = 0;
+    await h.handle({ type: 'init', save: null });
+    expect(ofType(out, 'report')[0]!.report).toMatchObject({ day: 1, date: null, company: { source: 'seed' } });
+  });
+});

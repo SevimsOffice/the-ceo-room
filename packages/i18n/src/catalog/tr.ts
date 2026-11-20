@@ -3,6 +3,8 @@
  * Yer tutucular: `{param}` ya da `{param:biçim}` (translate.ts). Anahtarlar ve yer tutucular en.ts
  * ile aynı olmalı (bir test denetler).
  */
+import { importTr } from './import.tr';
+
 export const tr: Readonly<Record<string, string>> = {
   // ---- şirket --------------------------------------------------------------------------------
   'company.name': 'NOVARA Sanayi',
@@ -580,4 +582,6 @@ export const tr: Readonly<Record<string, string>> = {
   'ui.command.switchSupplier': 'tedarikçi değişikliği',
   'ui.command.repriceOrders': 'sipariş fiyatlaması',
   'ui.command.grantDiscount': 'indirim',
+  // ---- data import (@ceo-room/import): report codes and template texts ----
+  ...importTr,
 };

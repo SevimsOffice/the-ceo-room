@@ -445,7 +445,9 @@ function crossChecks(ctx: Ctx, snapshot: string | null): void {
     overdue(S.OpenPurchaseOrders, r, 'due_date');
   }
   for (const r of S.Receivables.rows) {
-    after(S.Receivables, r, 'invoice_date');
+    // an invoice dated after the snapshot is unusual but harmless (the balance is open either way)
+    const inv = s(r, 'invoice_date');
+    if (snapshot !== null && inv !== null && inv > snapshot) ctx.issues.warning('import.date.invoiceAfterSnapshot', ctx.at(S.Receivables, r.row, 'invoice_date', inv));
     overdue(S.Receivables, r, 'due_date');
   }
   for (const r of S.Payables.rows) overdue(S.Payables, r, 'due_date');

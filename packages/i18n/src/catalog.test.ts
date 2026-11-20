@@ -45,9 +45,10 @@ describe('catalogue completeness against the engine (listMessageCodes of the see
       expect(bad).toEqual([]);
     });
 
-    it(`${locale}: every key that is not ui.* is an engine code`, () => {
+    // import.* keys belong to @ceo-room/import; its catalogue test checks them against listImportCodes().
+    it(`${locale}: every key that is not ui.* or import.* is an engine code`, () => {
       const codes = new Set(specs.map((s) => s.code));
-      const extra = Object.keys(CATALOGS[locale]).filter((k) => !k.startsWith('ui.') && !codes.has(k));
+      const extra = Object.keys(CATALOGS[locale]).filter((k) => !k.startsWith('ui.') && !k.startsWith('import.') && !codes.has(k));
       expect(extra).toEqual([]);
     });
 

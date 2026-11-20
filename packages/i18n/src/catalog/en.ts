@@ -3,6 +3,8 @@
  * Placeholders: `{param}` or `{param:format}`, see translate.ts. Keep keys and placeholders in
  * step with tr.ts (a test checks both).
  */
+import { importEn } from './import.en';
+
 export const en: Readonly<Record<string, string>> = {
   // ---- company -------------------------------------------------------------------------------
   'company.name': 'NOVARA Industries',
@@ -580,4 +582,6 @@ export const en: Readonly<Record<string, string>> = {
   'ui.command.switchSupplier': 'switch supplier',
   'ui.command.repriceOrders': 'reprice orders',
   'ui.command.grantDiscount': 'grant a discount',
+  // ---- data import (@ceo-room/import): report codes and template texts ----
+  ...importEn,
 };

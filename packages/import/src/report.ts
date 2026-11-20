@@ -91,6 +91,7 @@ export const ISSUE_CODES = {
   'import.order.overdue': [],
   'import.demand.qtyRange': [],
   'import.date.afterSnapshot': [],
+  'import.date.invoiceAfterSnapshot': [],
   'import.date.overdue': [],
   'import.date.beforeSnapshot': [],
   'import.stockValue.implausible': ['expected', 'deviationPct'],

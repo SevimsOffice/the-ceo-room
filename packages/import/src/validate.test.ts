@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { REAL_SNAPSHOT, clone, realCompany, setCell } from '../test/fixtures';
-import { type ImportIssue, type ImportReport, type Workbook, ISSUE_CODES, MAX_ROWS_PER_SHEET, analyseWorkbook, cellRef, sanitiseWorkbook, validateWorkbook } from './index';
+import { type ImportIssue, type ImportReport, type Workbook, GENERIC_PROFILE, ISSUE_CODES, MAX_ROWS_PER_SHEET, analyseWorkbook, cellRef, sanitiseWorkbook, toSeedBundle, validateWorkbook } from './index';
 
 const base = realCompany();
 const fresh = (): Workbook => clone(base);
@@ -108,7 +108,7 @@ describe('level 1: structure', () => {
 describe('level 2: fields', () => {
   const cases: [string, (wb: Workbook) => Workbook, string, [string, number, string, string]][] = [
     ['bad number', (wb) => setCell(wb, 'OpenOrders', 4, 'qty', 'abc'), 'import.field.notNumber', ['OpenOrders', 4, 'qty', 'E']],
-    ['thousands dots are ambiguous', (wb) => setCell(wb, 'Customers', 4, 'annual_revenue', '24.000.000'), 'import.field.notNumber', ['Customers', 4, 'annual_revenue', 'I']],
+    ['badly grouped thousands', (wb) => setCell(wb, 'Customers', 4, 'annual_revenue', '24.00.000'), 'import.field.notNumber', ['Customers', 4, 'annual_revenue', 'I']],
     ['decimal where an integer is required', (wb) => setCell(wb, 'BOM', 4, 'qty_per_unit', 2.5), 'import.field.notInteger', ['BOM', 4, 'qty_per_unit', 'C']],
     ['negative money', (wb) => setCell(wb, 'Products', 5, 'unit_price', -5), 'import.field.negative', ['Products', 5, 'unit_price', 'C']],
     ['impossible date', (wb) => setCell(wb, 'Receivables', 4, 'due_date', '2027-02-30'), 'import.field.notDate', ['Receivables', 4, 'due_date', 'E']],
@@ -174,6 +174,23 @@ describe('level 2: fields', () => {
 
   it('accepts Excel serial dates, DD.MM.YYYY, Turkish booleans, grouped digits and lower-case codes', () => {
     expect(validateWorkbook(base).summary.errors).toBe(0); // the fixture uses all of them
+  });
+});
+
+describe('Turkish thousands format', () => {
+  it('reads "24.000.000" as 24 million TL with no issue on the cell; "24.000" stays ambiguous', () => {
+    const wb = clone(base);
+    setCell(wb, 'Customers', 4, 'annual_revenue', '24.000.000');
+    const r = validateWorkbook(wb);
+    expect(r.summary.errors).toBe(0);
+    expect(r.issues.filter((i) => i.sheet === 'Customers' && i.row === 4 && i.column === 'annual_revenue')).toEqual([]);
+    const built = toSeedBundle(wb, { workspaceId: 'ws_test', profile: GENERIC_PROFILE });
+    expect(built.ok).toBe(true);
+    if (built.ok) expect(built.bundle.customers[0]!.annualRevenue).toBe(2_400_000_000);
+
+    const amb = clone(base);
+    setCell(amb, 'Customers', 4, 'annual_revenue', '24.000');
+    expect(validateWorkbook(amb).issues.map((i) => i.code)).toContain('import.field.ambiguousSeparator');
   });
 });
 

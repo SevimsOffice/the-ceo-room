@@ -100,7 +100,9 @@ export function parseNumberText(text: string): Decimal | 'ambiguous' | null {
   }
   const sep = dot >= 0 ? '.' : ',';
   const parts = body.split(sep);
-  if (parts.length > 2) return null;
+  // Two or more of the same separator can only be thousands groups ("24.000.000", "1,250,000"):
+  // a first group of 1–3 digits, then groups of exactly 3. A single separator stays ambiguous below.
+  if (parts.length > 2) return grouped(body, sep) && /^[1-9]/.test(body) ? plain(parts.join(''), '') : null;
   const [int, frac] = parts as [string, string];
   if (frac.length === 0) return null;
   if (frac.length === 3 && /^[1-9]\d{0,2}$/.test(int)) return 'ambiguous';

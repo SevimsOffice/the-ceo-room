@@ -20,7 +20,7 @@ describe('decimals are scaled exactly (no float money)', () => {
     expect(kurus('1.0151')).toBe(102);
     expect(kurus(-12.345)).toBe(-1234);
     expect(kurus(1e-7)).toBe(0);
-    expect(kurus('1.234.567')).toBeNull();
+    expect(kurus('1.234.567')).toBe(123_456_700); // thousands groups only: 1 234 567 TL
     expect(kurus('12a')).toBeNull();
     expect(kurus(Number.NaN)).toBeNull();
   });
@@ -37,6 +37,14 @@ describe('decimals are scaled exactly (no float money)', () => {
     expect(kurus('1,250.50')).toBe(125050);
     expect(kurus('41 200 000,00')).toBe(4_120_000_000);
     for (const bad of ['1.2,5', '12,50.5', '1,250,50.0', '1.', ',5']) expect(kurus(bad), bad).toBeNull();
+    // two or more of the same separator with groups of three: the Turkish (or English) thousands format
+    expect(kurus('24.000.000')).toBe(2_400_000_000);
+    expect(kurus('1,250,000')).toBe(125_000_000);
+    expect(kurus('-3.500.000')).toBe(-350_000_000);
+    expect(kurus('24 000 000')).toBe(2_400_000_000);
+    for (const bad of ['24.00.000', '24.000.00', '1234.567.890', '0.000.500', '000.500.000', '24.000.000.']) expect(kurus(bad), bad).toBeNull();
+    // a single separator followed by three digits could still be a decimal: rejected, not guessed
+    for (const amb of ['24.000', '1.250', '999,999']) expect(parseNumberText(amb), amb).toBe('ambiguous');
     // numeric cells are numbers: never ambiguous
     expect(kurus(1.25)).toBe(125);
     expect(kurus(1250)).toBe(125000);

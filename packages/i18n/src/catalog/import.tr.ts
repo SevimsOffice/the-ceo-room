@@ -38,7 +38,7 @@ export const importTr: Readonly<Record<string, string>> = {
   "import.structure.tooFewRows": "Bu sayfada 4. satırdan itibaren en az {min:int} veri satırı olmalı.",
   "import.structure.singleRow": "Bu sayfada yalnızca bir satır olabilir.",
   "import.field.required": "Zorunlu değer boş.",
-  "import.field.notNumber": "Sayı değil. Rakam yazın, en çok bir ondalık ayırıcıyla (1250,50); binlikler yalnızca ondalıkla (1.250,50) ya da boşlukla (1 250) gruplanabilir.",
+  "import.field.notNumber": "Sayı değil. Rakam yazın, en çok bir ondalık ayırıcıyla (1250,50); binlikleri üçerli gruplayın (24.000.000 ya da 1.250,50) ya da boşlukla ayırın (1 250).",
   "import.field.notInteger": "Burada tam sayı olmalı.",
   "import.field.negative": "Eksi olamaz.",
   "import.field.outOfRange": "{min:int} ile {max:int} arasında olmalı.",

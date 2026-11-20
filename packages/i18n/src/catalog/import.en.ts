@@ -38,7 +38,7 @@ export const importEn: Readonly<Record<string, string>> = {
   "import.structure.tooFewRows": "This sheet needs at least {min:int} row(s) of data from row 4.",
   "import.structure.singleRow": "Only one row is allowed on this sheet.",
   "import.field.required": "Required value missing.",
-  "import.field.notNumber": "Not a number. Write digits with at most one decimal separator (1250,50); thousands may be grouped only with a decimal part (1.250,50) or with spaces (1 250).",
+  "import.field.notNumber": "Not a number. Write digits with at most one decimal separator (1250,50); group thousands in threes (24.000.000 or 1.250,50) or with spaces (1 250).",
   "import.field.notInteger": "A whole number is required here.",
   "import.field.negative": "Must not be negative.",
   "import.field.outOfRange": "Must be between {min:int} and {max:int}.",

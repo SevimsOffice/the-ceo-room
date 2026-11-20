@@ -296,8 +296,10 @@ API and full column list: `packages/import/README.md`. Refinements of §2–§4:
   separator and the other must group by threes (`41.200.000,00`, `1,250.50`); one separator once is
   a decimal point (`1,25`, `1250,5`, `0.125`) except before exactly three digits after a 1–3 digit
   integer part (`1.250`, `12.500`, `250,000`), which is `import.field.ambiguousSeparator` (error);
-  one separator repeated without a decimal part (`24.000.000`) stays `notNumber`. Numeric cells are
-  numbers and never ambiguous.
+  one separator repeated, every group after the first exactly three digits and the first group
+  1–3 digits not starting with 0, is the thousands format (`24.000.000` = 24 million, `1,250,000`);
+  any other repeated separator (`24.00.000`, `0.000.500`) is `notNumber`. Numeric cells are numbers
+  and never ambiguous.
 - **Percent cells:** the xlsx adapter reads `styles.xml` and each sheet's cell styles; numbers in the
   template's percent columns with a percent format (built-in 9/10 or a custom code with `%`) are read
   as shown (0.95 → 95, by moving the decimal point). Independently, a percent column whose given

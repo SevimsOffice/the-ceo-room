@@ -91,7 +91,7 @@ export function validateSeedBundle(raw: unknown): SeedValidation {
       if (co.source !== undefined && co.source !== 'seed' && co.source !== 'import') c.errors.push('company.company.source: expected seed | import');
       const snap = co.snapshotDate;
       if (snap !== undefined && snap !== null && (typeof snap !== 'string' || !isIsoDate(snap))) c.errors.push('company.company.snapshotDate: expected YYYY-MM-DD or null');
-      if (co.source === 'import' && (typeof snap !== 'string' || co.simulated !== false)) c.errors.push('company.company: an imported company needs a snapshotDate and simulated false');
+      if (co.source === 'import' && typeof snap !== 'string') c.errors.push('company.company.snapshotDate: an imported company needs its snapshot date');
       if (co.source !== 'import' && co.simulated !== true) c.errors.push('company.company.simulated: must be true for a seed company');
       optionalText(c, 'company.company.name', co.name);
     }

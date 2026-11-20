@@ -131,7 +131,8 @@ describe('company source and snapshot date in state', () => {
     expect(errs(() => undefined)).toEqual([]);
     expect(errs((c) => Object.assign(c, { source: 'import', simulated: false, snapshotDate: '2027-01-31', name: 'Örnek A.Ş.' }))).toEqual([]);
     expect(errs((c) => Object.assign(c, { source: 'import', simulated: false }))).toHaveLength(1);
-    expect(errs((c) => Object.assign(c, { source: 'import', simulated: true, snapshotDate: '2027-01-31' }))).toHaveLength(1);
+    // the sample company imported from its own template stays simulated
+    expect(errs((c) => Object.assign(c, { source: 'import', simulated: true, snapshotDate: '2027-01-31' }))).toEqual([]);
     expect(errs((c) => Object.assign(c, { snapshotDate: '2027-02-30' }))[0]).toMatch(/snapshotDate/);
     expect(errs((c) => Object.assign(c, { source: 'erp' }))[0]).toMatch(/source/);
     expect(errs((c) => Object.assign(c, { simulated: false }))[0]).toMatch(/simulated/);

@@ -93,6 +93,18 @@ importers:
         specifier: workspace:*
         version: link:../seed-data
 
+  packages/import:
+    dependencies:
+      '@ceo-room/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@ceo-room/i18n':
+        specifier: workspace:*
+        version: link:../i18n
+      '@ceo-room/seed-data':
+        specifier: workspace:*
+        version: link:../seed-data
+
   packages/seed-data:
     dependencies:
       '@ceo-room/engine':

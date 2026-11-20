@@ -46,7 +46,7 @@ export interface Company {
   name?: string;
   city: string;
   currency: string;
-  /** true for the sample company (all figures simulated); false for an imported company */
+  /** true for the sample company (all figures simulated, also when imported from its own template) */
   simulated: boolean;
   source: CompanySource;
   /** ISO date (YYYY-MM-DD) of Day 1 for an imported company; null for the simulated seed */

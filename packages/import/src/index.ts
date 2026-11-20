@@ -5,6 +5,7 @@ export { columnLetter, parseDateCell, parseBoolCell, isoToExcelSerial } from './
 export { exportTemplate, README_LINES } from './export';
 export type { ExportOptions } from './export';
 export { validateWorkbook, analyseWorkbook, DEFAULT_ONBOARDING_DAYS } from './validate';
+export { sanitiseWorkbook } from './sanitise';
 export type { Analysis, ParsedRow, ParsedSheet, ValidateOptions, Value } from './validate';
 export { toSeedBundle, TemplateDataSource, ImportFailedError } from './convert';
 export type { ImportResult, ToSeedBundleOptions } from './convert';

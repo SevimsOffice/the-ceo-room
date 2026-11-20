@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { REAL_SNAPSHOT, clone, realCompany, setCell } from '../test/fixtures';
-import { type ImportIssue, type ImportReport, type Workbook, ISSUE_CODES, MAX_ROWS_PER_SHEET, cellRef, validateWorkbook } from './index';
+import { type ImportIssue, type ImportReport, type Workbook, ISSUE_CODES, MAX_ROWS_PER_SHEET, analyseWorkbook, cellRef, sanitiseWorkbook, validateWorkbook } from './index';
 
 const base = realCompany();
 const fresh = (): Workbook => clone(base);
@@ -122,6 +122,8 @@ describe('level 2: fields', () => {
     ['not a country code', (wb) => setCell(wb, 'Customers', 6, 'country', 'Germany'), 'import.field.notCountry', ['Customers', 6, 'country', 'C']],
     ['required value blank', (wb) => setCell(wb, 'Products', 4, 'minutes_per_unit', null), 'import.field.required', ['Products', 4, 'minutes_per_unit', 'D']],
     ['text too long', (wb) => setCell(wb, 'Customers', 4, 'name', 'x'.repeat(121)), 'import.field.tooLong', ['Customers', 4, 'name', 'B']],
+    ['one dot before three digits: thousands or decimals?', (wb) => setCell(wb, 'Customers', 4, 'annual_revenue', '1.250'), 'import.field.ambiguousSeparator', ['Customers', 4, 'annual_revenue', 'I']],
+    ['one comma before three digits in a quantity', (wb) => setCell(wb, 'OpenOrders', 4, 'qty', '12,500'), 'import.field.ambiguousSeparator', ['OpenOrders', 4, 'qty', 'E']],
   ];
   for (const [name, mutate, code, cell] of cases) {
     it(name, () => {
@@ -129,12 +131,39 @@ describe('level 2: fields', () => {
       const i = one(r, code);
       expect(where(i)).toEqual(cell);
       expect(i.severity).toBe('error');
-      if (code !== 'import.field.required') expect(i.value).toBeDefined();
+      // free text that is too long is not echoed (it may be a pasted note)
+      if (code === 'import.field.tooLong') expect('value' in i).toBe(false);
+      else if (code !== 'import.field.required') expect(i.value).toBeDefined();
     });
   }
 
+  it('reads unambiguous text numbers: 1,25 and 1250,5 as decimals, 41.200.000,00 and 1,250.50 grouped', () => {
+    const wb = setCell(fresh(), 'Customers', 4, 'annual_revenue', '41.200.000,00');
+    setCell(wb, 'Customers', 5, 'annual_revenue', '1,250.50');
+    setCell(wb, 'Products', 4, 'unit_price', '1250,5');
+    setCell(wb, 'Customers', 4, 'discount_pct', '1,25');
+    const a = analyseWorkbook(wb);
+    expect(a.report.summary.errors).toBe(0);
+    expect(a.sheets.Customers.rows[0]!.values.annual_revenue).toBe(4_120_000_000);
+    expect(a.sheets.Customers.rows[1]!.values.annual_revenue).toBe(125_050);
+    expect(a.sheets.Products.rows[0]!.values.unit_price).toBe(125_050);
+    expect(a.sheets.Customers.rows[0]!.values.discount_pct).toBe(125);
+  });
+
   it('range errors carry the bounds in template units', () => {
     expect(one(validateWorkbook(setCell(fresh(), 'Suppliers', 4, 'on_time_delivery_pct', 120)), 'import.field.outOfRange').params).toEqual({ min: 0, max: 100 });
+  });
+
+  it('warns when every value of a percent column is a fraction (Excel percentages read as 0.95)', () => {
+    const wb = setCell(fresh(), 'Suppliers', 4, 'on_time_delivery_pct', 0.96);
+    setCell(wb, 'Suppliers', 5, 'on_time_delivery_pct', 0.9);
+    const r = validateWorkbook(wb);
+    const i = one(r, 'import.field.percentLooksFractional');
+    expect([i.severity, ...where(i)]).toEqual(['warning', 'Suppliers', null, 'on_time_delivery_pct', 'F']);
+    // one real percentage in the column: no warning; zeros do not count either way
+    setCell(wb, 'Suppliers', 5, 'on_time_delivery_pct', 90);
+    expect(issues(validateWorkbook(wb), 'import.field.percentLooksFractional')).toEqual([]);
+    expect(issues(validateWorkbook(base), 'import.field.percentLooksFractional')).toEqual([]);
   });
 
   it('rounds money beyond 2 decimals half to even and notes it', () => {
@@ -171,6 +200,36 @@ describe('level 2: privacy guard', () => {
       expect('value' in i).toBe(false); // personal data is never echoed into the report
     });
   }
+
+  it('a sheet outside the template with personal headers (Personel: Ad Soyad, Maaş) is an error, not a warning', () => {
+    const wb = fresh();
+    wb.Personel = [['Ad Soyad', 'Maaş'], ['Ayşe Kaya', 85000]];
+    const i = one(validateWorkbook(wb), 'import.privacy.personSheet');
+    expect([i.severity, ...where(i)]).toEqual(['error', 'Personel', 1, 'ad_soyad', 'A']);
+    expect(issues(validateWorkbook(wb), 'import.structure.unknownSheet')).toEqual([]);
+    const named = fresh();
+    named.Personel = [['tutar'], [85000]];
+    expect(where(one(validateWorkbook(named), 'import.privacy.personSheet'))).toEqual(['Personel', null, null, null]);
+    const notes = fresh();
+    notes.Notlar = [['konu', 'tarih'], ['stok sayımı', '2027-01-10']];
+    expect(validateWorkbook(notes).summary.errors).toBe(0);
+  });
+
+  it('a contact-person column on Customers is an error (company names stay allowed)', () => {
+    const wb = fresh();
+    wb.Customers![0]!.push('contact_person');
+    expect(where(one(validateWorkbook(wb), 'import.privacy.personColumn'))).toEqual(['Customers', 1, 'contact_person', 'L']);
+    expect(validateWorkbook(fresh()).issues.filter((x) => x.code.startsWith('import.privacy.'))).toEqual([]);
+  });
+
+  it('no finding echoes a cell where personal data was found', () => {
+    const wb = setCell(fresh(), 'OpenOrders', 5, 'customer_id', 'ayse.kaya@example.com');
+    const r = validateWorkbook(wb);
+    const fk = one(r, 'import.fk.missing');
+    expect(where(fk)).toEqual(['OpenOrders', 5, 'customer_id', 'B']);
+    expect('value' in fk).toBe(false);
+    expect(JSON.stringify(r)).not.toContain('ayse.kaya');
+  });
 
   it('does not flag figures, dates or codes', () => {
     const wb = setCell(fresh(), 'Customers', 4, 'annual_revenue', Number(TCKN)); // a large amount, not an ID
@@ -290,5 +349,30 @@ describe('level 3: cross-sheet and business rules', () => {
   it('cell references read as in Excel', () => {
     expect(cellRef({ sheet: 'OpenOrders', row: 7, columnLetter: 'C' })).toBe('OpenOrders!C7');
     expect(cellRef({ sheet: 'Customers', row: null, columnLetter: null })).toBe('Customers');
+  });
+});
+
+describe('the workbook kept after an import', () => {
+  it('holds the template sheets and known columns only, rows and letters unchanged', () => {
+    const wb = fresh();
+    wb.Notlar = [['konu'], ['stok sayımı']];
+    wb.Customers![0]!.push('remarks');
+    wb.Customers![3]!.push('call before noon');
+    wb.Customers![1]![0] = 'my label note';
+    wb.README!.push(['free text in the README']);
+    const kept = sanitiseWorkbook(wb);
+    expect(Object.keys(kept).sort()).toEqual(Object.keys(base).sort());
+    expect(kept.Customers![0]).toEqual(base.Customers![0]);
+    expect(kept.Customers![1]).toEqual([]);
+    expect(JSON.stringify(kept)).not.toMatch(/stok sayımı|remarks|call before noon|my label note|free text/);
+    expect(kept.README).toEqual([base.README![0]!.slice(0, 2)]);
+    // validating what is kept gives the same data and the same errors, minus the dropped extras
+    const a = analyseWorkbook(wb);
+    const b = analyseWorkbook(kept);
+    expect(b.report.summary.errors).toBe(0);
+    expect(b.report.summary.warnings).toBe(a.report.summary.warnings - 2); // unknown sheet, unknown column
+    for (const name of Object.keys(b.sheets) as (keyof typeof b.sheets)[]) expect(b.sheets[name].rows).toEqual(a.sheets[name].rows);
+    const fk = setCell(clone(kept), 'OpenOrders', 5, 'customer_id', 'C-099');
+    expect(where(one(validateWorkbook(fk), 'import.fk.missing'))).toEqual(['OpenOrders', 5, 'customer_id', 'B']);
   });
 });

@@ -37,6 +37,33 @@ describe('seed', () => {
       expect(v.errors.some((e) => e.includes('unitPrice'))).toBe(true);
     }
   });
+
+  it("reports every id an event card names (alternative supplier, its offer, the card's department) instead of crashing at start", () => {
+    type RawCard = { id: string; trigger: Record<string, unknown>; effect: Record<string, unknown> };
+    const raw = rawSeed() as { eventCards: RawCard[]; suppliers: { id: string; offers: { materialId: string }[] }[] };
+    const steel = raw.eventCards.find((c) => c.effect.kind === 'supplierPriceChange')!;
+    const alt = String(steel.effect.alternativeSupplierId);
+    // the alternative supplier is gone
+    const gone = rawSeed() as typeof raw;
+    gone.suppliers = gone.suppliers.filter((s) => s.id !== alt);
+    for (const m of (gone as unknown as { materials: { preferredSupplierId: string }[] }).materials) if (m.preferredSupplierId === alt) m.preferredSupplierId = gone.suppliers[0]!.id;
+    const v1 = validateSeedBundle(gone);
+    expect(v1.ok).toBe(false);
+    if (!v1.ok) expect(v1.errors).toContain(`eventCards[${raw.eventCards.indexOf(steel)}].effect.alternativeSupplierId: unknown reference ${alt}`);
+    // it exists but does not sell the material
+    const noOffer = rawSeed() as typeof raw;
+    const s = noOffer.suppliers.find((x) => x.id === alt)!;
+    s.offers = s.offers.filter((o) => o.materialId !== steel.effect.materialId);
+    const v2 = validateSeedBundle(noOffer);
+    expect(v2.ok).toBe(false);
+    if (!v2.ok) expect(v2.errors.some((e) => e.includes(`supplier ${alt} has no offer for ${String(steel.effect.materialId)}`))).toBe(true);
+    // a turnover card for a department without a workforce row
+    const noDept = rawSeed() as typeof raw & { workforce: { departmentId: string }[] };
+    noDept.workforce = noDept.workforce.filter((w) => w.departmentId !== 'operations');
+    const v3 = validateSeedBundle(noDept);
+    expect(v3.ok).toBe(false);
+    if (!v3.ok) expect(v3.errors.some((e) => e.includes('trigger.departmentId: unknown reference operations'))).toBe(true);
+  });
 });
 
 describe('Day 1', () => {

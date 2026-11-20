@@ -14,7 +14,8 @@ import { createHandler } from '../worker/handler';
 import type { WorkerRequest, WorkerResponse } from '../worker/protocol';
 import { workbookToXlsx } from '../xlsx/xlsx';
 import { setArchiveServices, useArchive } from './archive';
-import { type CompanyDb, memoryCompanyDb } from './companyDb';
+import { IDBFactory } from 'fake-indexeddb';
+import { type CompanyDb, indexedDbCompanyDb, memoryCompanyDb } from './companyDb';
 import { setTransport, useGame } from './game';
 import { resumeCompany } from './resume';
 import { COMPANY_KEY, MINE_SAVE_KEY, SAVE_KEY, loadSave } from './storage';
@@ -277,5 +278,66 @@ describe('sample company and My company', () => {
     await vi.waitFor(() => expect(useArchive.getState().browse?.status).toBe('ready'));
     expect(useArchive.getState().browse!.book!.company).toBe('sample');
     expect(useArchive.getState().browse!.book!.sheets.find((s) => s.name === 'Customers')!.rows).toHaveLength(8);
+  });
+
+  it('keeps only the sanitised workbook in IndexedDB: no unknown sheet or column, no label rows', async () => {
+    const factory = new IDBFactory();
+    db = indexedDbCompanyDb(factory);
+    const c = connect();
+    await c.boot();
+    const wb = exportTemplate(seed, { lang: 'tr', example: true });
+    wb.Notlar = [['konu', 'not'], ['stok sayımı', 'pazartesi bakılacak']];
+    wb.Customers![0]!.push('remarks');
+    wb.Customers![3]!.push('öğleden önce aranmalı');
+    await useArchive.getState().inspect(await file(wb));
+    const ins = useArchive.getState().inspection;
+    expect(ins.status === 'ready' && ins.report.summary.errors).toBe(0);
+    expect(ins.status === 'ready' && Object.keys(ins.workbook)).not.toContain('Notlar');
+    useArchive.getState().requestImport();
+    await vi.waitFor(() => expect(useGame.getState().company).toBe('mine'));
+    await c.settle();
+    // read back what the browser's database holds, through a second connection to it
+    const stored = (await indexedDbCompanyDb(factory).loadData())!;
+    const text = JSON.stringify(stored.workbook);
+    expect(Object.keys(stored.workbook)).not.toContain('Notlar');
+    expect(stored.workbook.Customers![0]).not.toContain('remarks');
+    expect(text).not.toMatch(/stok sayımı|pazartesi|öğleden|remarks/);
+    expect(stored.workbook.Customers![1]).toEqual([]);
+    expect(stored.workbook.Customers!.length).toBe(wb.Customers!.length);
+  });
+
+  it('a stored My company that cannot start puts the sample on the desk with a slip, and stays there after a reload', async () => {
+    const c = connect();
+    await c.boot();
+    await useArchive.getState().inspect(await file(exportTemplate(seed, { lang: 'tr', example: true })));
+    useArchive.getState().requestImport();
+    await vi.waitFor(() => expect(useGame.getState().company).toBe('mine'));
+    await c.settle();
+    // damage the stored company as an older version could have stored it: a card names a missing supplier
+    const data = (await db.loadData())!;
+    const card = data.bundle.eventCards.find((x) => x.effect.kind === 'supplierPriceChange')!;
+    if (card.effect.kind === 'supplierPriceChange') card.effect.alternativeSupplierId = 'sup_gone';
+    await db.save({ meta: (await db.loadMeta())!, data });
+
+    await reload();
+    expect(useGame.getState()).toMatchObject({ company: 'sample', fatal: null, phase: 'ready' });
+    expect(useGame.getState().notice).toMatchObject({ key: 'ui.status.companyFailed' });
+    expect(report()).toMatchObject({ day: 1, date: null });
+    expect(storage.getItem(COMPANY_KEY)).toBeNull();
+    // My company's data is still there for the Archive Room
+    expect(useGame.getState().myCompany?.fileName).toBe('firma.xlsx');
+    await reload();
+    expect(useGame.getState()).toMatchObject({ company: 'sample', fatal: null, phase: 'ready', notice: null });
+    // asking for it again says so again, without breaking the desk
+    await useArchive.getState().switchCompany('mine');
+    await c.settle();
+    await vi.waitFor(() => expect(useGame.getState().phase).toBe('ready'));
+    expect(useGame.getState()).toMatchObject({ company: 'sample', fatal: null, notice: { key: 'ui.status.companyFailed' } });
+  });
+
+  it('a request the archive worker does not answer in time ends the reading with a reason', async () => {
+    setArchiveServices({ db, archive: { call: async () => ({ type: 'failed', requestId: 0, detail: 'timeout' }) } });
+    await useArchive.getState().inspect(await file(exportTemplate(seed, { lang: 'tr', example: false })));
+    expect(useArchive.getState().inspection).toMatchObject({ status: 'failed', failure: 'timeout', fileName: 'firma.xlsx' });
   });
 });

@@ -10,6 +10,9 @@ import type { CompanyId } from '../archive/protocol';
 import type { MyCompanyMeta } from './companyDb';
 import { backupSave, loadActiveCompany, loadLocale, storeActiveCompany, storeLocale, storeSave } from './storage';
 
+/** The status slip's note when My company could not be opened (the sample replaced it). */
+const COMPANY_FAILED = 'ui.status.companyFailed';
+
 /** Auto-advance pace when playing. */
 export const PLAY_INTERVAL_MS = 1500;
 
@@ -500,7 +503,8 @@ export const useGame = create<GameState>()((set, get) => ({
           directory: msg.directory,
           currency: msg.currency,
           thresholds: msg.thresholds,
-          notice: msg.restoreError ? { key: 'ui.status.restoreFailed', detail: msg.restoreError } : null,
+          // (the note that My company could not be opened stays for the sample that replaced it)
+          notice: msg.restoreError ? { key: 'ui.status.restoreFailed', detail: msg.restoreError } : get().notice?.key === COMPANY_FAILED ? get().notice : null,
           // a (re)started engine has no room open and has posted no slip yet (the Archive Room stays)
           view: get().view === 'archive' ? 'archive' : 'desk',
           room: null,
@@ -571,6 +575,13 @@ export const useGame = create<GameState>()((set, get) => ({
         stopTimer();
         set({ fatal: msg.error, playing: false, advancePending: false, busy: null });
         return;
+      case 'companyFailed': {
+        // My company's data cannot run: the sample goes back on the desk (and stays there after a
+        // reload); My company's data and save stay stored for the Archive Room
+        get().openCompany('sample', null);
+        set({ notice: { key: COMPANY_FAILED, detail: msg.error } });
+        return;
+      }
       case 'dossier': {
         const d = get().dossier;
         if (d && d.decisionId === msg.decisionId) set({ dossier: { decisionId: msg.decisionId, view: msg.view, loaded: true } });

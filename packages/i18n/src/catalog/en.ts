@@ -286,6 +286,7 @@ export const en: Readonly<Record<string, string>> = {
   'ui.status.loading': 'Opening the office…',
   'ui.status.newDay': '{day:day}, {weekday:text}. The morning report is on the desk.',
   'ui.status.restoreFailed': 'The saved game could not be loaded ({reason:text}). The old game was kept as a backup; a new game has begun.',
+  'ui.status.companyFailed': 'Your company could not be opened ({reason:text}). The sample company is on the desk; your data is still kept in the Archive Room.',
   'ui.error.saveCorrupt': 'the save is damaged',
   'ui.error.saveUnreadable': 'the save cannot be read',
   'ui.error.saveHashMismatch': 'the replayed game does not match the saved state',
@@ -672,6 +673,9 @@ export const en: Readonly<Record<string, string>> = {
   'ui.archive.read.notXlsx': 'This is not an Excel (.xlsx) file. Save old .xls or .csv files as “.xlsx” in Excel and upload again.',
   'ui.archive.read.corrupt': 'The file is damaged or not a workbook. Try opening it in Excel and saving it again.',
   'ui.archive.read.failed': 'Something unexpected went wrong while reading the file. Try again.',
+  'ui.archive.read.unzippedTooLarge': 'The file unpacks to more than {unzippedMb:int} MB, far more than a filled template. Remove unneeded sheets, pictures or formatting and save it again.',
+  'ui.archive.read.tooManyCells': 'The file has too many cells: at most {cells:int} cells in all and {columns:int} columns per sheet.',
+  'ui.archive.read.timeout': 'Reading the file took too long and was stopped. Try again, or upload a smaller file.',
 
   'ui.archive.report.heading': 'Inspection Report',
   'ui.archive.report.placeholder': 'No file inspected yet. Download the template, fill it in and upload it: the inspection report is typed here.',

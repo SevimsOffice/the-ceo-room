@@ -47,8 +47,11 @@ interface Decimal {
   frac: string;
 }
 
-const GROUP_SPACES = /[\s  ]/g;
-const DECIMAL = /^([+-]?)(\d+)(?:[.,](\d+))?$/;
+const GROUP_SPACES = /[\s\u00a0\u202f]/g;
+const NUMBER_TEXT = /^([+-]?)(\d[\d.,]*)$/;
+
+/** Digits grouped in threes by `sep` (1.250.000 or 1,250,000), the first group 1–3 digits. */
+const grouped = (s: string, sep: string): boolean => new RegExp(`^\\d{1,3}(?:\\${sep}\\d{3})+$`).test(s);
 
 /** Expand a JS number's shortest decimal representation (handles exponent notation). */
 function numberToDecimal(n: number): Decimal | null {
@@ -68,15 +71,51 @@ function numberToDecimal(n: number): Decimal | null {
 }
 
 /**
- * Parse a numeric cell: a number, or text with an optional sign, digits grouped by spaces and one
- * decimal separator (`.` or `,`). Thousands separators other than spaces are rejected (ambiguous).
+ * A number written as text, Turkish or English style, read only when unambiguous:
+ * - spaces group digits anywhere (`1 250 000`);
+ * - with both `.` and `,` the last one is the decimal separator and the other must group by threes
+ *   (`41.200.000,00`, `1,250.50`);
+ * - one kind repeated without a decimal part (`1.234.567`) is refused: write it with spaces, plain
+ *   digits or a decimal part (`1.234.567,00`);
+ * - one separator once is a decimal point (`1,25`, `1250,5`, `0.125`), except before exactly three
+ *   digits after a 1–3 digit integer part (`1.250`, `12.500`, `250,000`): thousands or decimals?
+ *   That is `'ambiguous'`.
+ */
+export function parseNumberText(text: string): Decimal | 'ambiguous' | null {
+  const m = NUMBER_TEXT.exec(text.replace(GROUP_SPACES, ''));
+  if (!m) return null;
+  const negative = m[1] === '-';
+  const body = m[2]!;
+  const dot = body.lastIndexOf('.');
+  const comma = body.lastIndexOf(',');
+  const plain = (int: string, frac: string): Decimal | null => (/^\d+$/.test(int) && /^\d*$/.test(frac) ? { negative, int, frac } : null);
+  if (dot < 0 && comma < 0) return plain(body, '');
+  if (dot >= 0 && comma >= 0) {
+    const decAt = Math.max(dot, comma);
+    const group = dot > comma ? ',' : '.';
+    const int = body.slice(0, decAt);
+    const frac = body.slice(decAt + 1);
+    if (!grouped(int, group) || !/^\d+$/.test(frac)) return null;
+    return plain(int.split(group).join(''), frac);
+  }
+  const sep = dot >= 0 ? '.' : ',';
+  const parts = body.split(sep);
+  if (parts.length > 2) return null;
+  const [int, frac] = parts as [string, string];
+  if (frac.length === 0) return null;
+  if (frac.length === 3 && /^[1-9]\d{0,2}$/.test(int)) return 'ambiguous';
+  return plain(int, frac);
+}
+
+/**
+ * Parse a numeric cell: a number, or text as `parseNumberText` reads it (null when not a number or
+ * ambiguous; the validator reports the ambiguous case on its own).
  */
 export function parseDecimal(c: Cell | undefined): Decimal | null {
   if (typeof c === 'number') return numberToDecimal(c);
   if (typeof c !== 'string') return null;
-  const m = DECIMAL.exec(c.replace(GROUP_SPACES, ''));
-  if (!m) return null;
-  return { negative: m[1] === '-', int: m[2] ?? '0', frac: m[3] ?? '' };
+  const d = parseNumberText(c);
+  return d === 'ambiguous' ? null : d;
 }
 
 export interface Scaled {

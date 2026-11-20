@@ -240,6 +240,43 @@ test('remove my company data: confirmed, gone from the browser, the sample back 
   await expect(page.getByTestId('header-day')).toHaveText('Gün 1 · Pazartesi');
 });
 
+test('a stored company that cannot start: the sample opens with a slip, and a reload does not fail again', async ({ page }, info) => {
+  await clean(page);
+  await importExample(page, info.outputPath('novara.xlsx'));
+  // damage the stored company as an older version could have kept it: a card names a missing supplier
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const r = indexedDB.open('ceo-room', 1);
+        r.onsuccess = () => {
+          const tx = r.result.transaction('company', 'readwrite');
+          const store = tx.objectStore('company');
+          const get = store.get('mine.data');
+          get.onsuccess = () => {
+            const data = get.result as { bundle: { eventCards: { effect: { kind: string; alternativeSupplierId?: string } }[] } };
+            for (const c of data.bundle.eventCards) if (c.effect.kind === 'supplierPriceChange') c.effect.alternativeSupplierId = 'sup_gone';
+            store.put(data, 'mine.data');
+          };
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+  );
+  await page.reload();
+  const slip = page.getByTestId('status-slip');
+  await expect(slip).toContainText('Şirketiniz açılamadı');
+  await expect(page.getByTestId('fatal-slip')).toHaveCount(0);
+  await expect(page.getByTestId('header-day')).toHaveText('Gün 1 · Pazartesi');
+  await expect(page.getByTestId('telegram')).toHaveCount(2); // the sample's Day 1
+  await page.reload();
+  await expect(page.getByTestId('header-day')).toHaveText('Gün 1 · Pazartesi');
+  await expect(page.getByTestId('fatal-slip')).toHaveCount(0);
+  await expect(page.getByTestId('status-slip')).toHaveCount(0);
+  await toArchive(page);
+  await expect(page.getByTestId('switch-sample')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('switch-mine')).toBeEnabled();
+});
+
 test('no network: template download, upload, validation, import and play only touch the site files', async ({ page }, info) => {
   const off: string[] = [];
   page.context().on('request', (r) => {

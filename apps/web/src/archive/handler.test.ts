@@ -103,6 +103,43 @@ describe('archive handler', () => {
     expect(selectMorningReport(mine.state(), { includeRunway: false })).toMatchObject({ date: '2027-01-11', forecast: true });
   });
 
+  it('the sample with a supplier deleted gets the generic profile and the engine starts (no storyline on missing records)', async () => {
+    const { ask } = harness();
+    const wb = exportTemplate(seed, { lang: 'tr', example: true });
+    const drop = (sheet: string, key: string, value: string) => {
+      const col = wb[sheet]![0]!.indexOf(key);
+      wb[sheet] = wb[sheet]!.filter((r, i) => i < 3 || r[col] !== value);
+    };
+    for (const [sheet, key] of [['Suppliers', 'supplier_id'], ['SupplierPrices', 'supplier_id'], ['OpenPurchaseOrders', 'supplier_id'], ['Payables', 'supplier_id']] as const) drop(sheet, key, 'sup_dogumetal');
+    const r = await ask({ type: 'build', requestId: 1, workbook: wb });
+    if (r.type !== 'built' || !r.ok) throw new Error(JSON.stringify(r));
+    expect(r.profile).toBe('generic');
+    expect(r.bundle.company.company.simulated).toBe(false);
+    expect(r.bundle.departments.every((d) => d.headName === '')).toBe(true);
+    expect(r.bundle.eventCards.some((c) => c.effect.kind === 'supplierPriceChange')).toBe(false);
+    const e = createEngine(r.bundle, { rngSeed: RNG_SEED, workspaceId: WORKSPACE_ID });
+    e.advance(30);
+    expect(e.state().day).toBe(31);
+  });
+
+  it("the sample's ids with other figures get the generic profile; the unchanged sample keeps its storyline", async () => {
+    const { ask } = harness();
+    const wb = exportTemplate(seed, { lang: 'en', example: true });
+    const cash = wb.Cash![3]![wb.Cash![0]!.indexOf('balance')] as number;
+    setCell(wb, 'Cash', 4, 'balance', cash + 1);
+    const changed = await ask({ type: 'build', requestId: 1, workbook: wb });
+    if (changed.type !== 'built' || !changed.ok) throw new Error('not built');
+    expect(changed.profile).toBe('generic');
+    expect(changed.bundle.company.company.simulated).toBe(false);
+    // renaming the company or a customer (labels) is still the sample
+    const renamed = exportTemplate(seed, { lang: 'en', example: true });
+    setCell(renamed, 'Settings', 4, 'company_name', 'Acme Test');
+    setCell(renamed, 'Customers', 4, 'name', 'Renamed Customer Ltd');
+    const same = await ask({ type: 'build', requestId: 2, workbook: renamed });
+    if (same.type !== 'built' || !same.ok) throw new Error('not built');
+    expect(same.profile).toBe('sample');
+  });
+
   it('builds another company with the generic profile (data-driven cards, its plain name)', async () => {
     const { ask } = harness();
     const r = await ask({ type: 'build', requestId: 1, workbook: realCompany() });
@@ -145,5 +182,54 @@ describe('archive handler', () => {
 
   it('quotes CSV cells that need it', () => {
     expect(toCsv([['a', 'b,c', 'say "hi"', null, true]])).toBe('﻿a,"b,c","say ""hi""",,TRUE\r\n');
+  });
+
+  it('never writes a cell a spreadsheet would run as a formula (CSV and xlsx report)', async () => {
+    expect(toCsv([['=HYPERLINK("http://x","y")', '+1', '-1+1', '@SUM(A1)', '\tx', '\rx', 'ok', -5]])).toBe(
+      `﻿"'=HYPERLINK(""http://x"",""y"")",'+1,'-1+1,'@SUM(A1),'\tx,"'\rx",ok,-5\r\n`,
+    );
+    const { ask } = harness();
+    const wb = exportTemplate(seed, { lang: 'en', example: true });
+    setCell(wb, 'OpenOrders', 7, 'customer_id', '=cmd|calc');
+    const ins = await ask({ type: 'inspect', requestId: 1, bytes: await xlsx(wb) });
+    if (ins.type !== 'inspected' || !ins.ok) throw new Error('not inspected');
+    const csv = await ask({ type: 'reportFile', requestId: 2, report: ins.report, lang: 'en', format: 'csv' });
+    if (csv.type !== 'file') throw new Error('no csv');
+    const text = new TextDecoder().decode(await csv.file.arrayBuffer());
+    expect(text).toContain(",'=cmd|calc");
+    expect(text).not.toMatch(/(^|,)=cmd/m);
+    const book = await ask({ type: 'reportFile', requestId: 3, report: ins.report, lang: 'en', format: 'xlsx' });
+    if (book.type !== 'file') throw new Error('no xlsx');
+    const rows = (await xlsxToWorkbook(await bytesOf(book.file))).Report!;
+    expect(rows.some((r) => r[4] === "'=cmd|calc")).toBe(true);
+    // every report cell is text
+    expect(rows.flat().every((c) => c === null || typeof c === 'string')).toBe(true);
+  });
+
+  it('inspection returns only the sanitised workbook: no sheet or column outside the template', async () => {
+    const { ask } = harness();
+    const wb = exportTemplate(seed, { lang: 'en', example: true });
+    wb.Notes = [['topic'], ['call the bank on Monday']];
+    wb.Customers![0]!.push('remarks');
+    wb.Customers![3]!.push('prefers mornings');
+    const r = await ask({ type: 'inspect', requestId: 1, bytes: await xlsx(wb) });
+    if (r.type !== 'inspected' || !r.ok) throw new Error('not inspected');
+    expect(r.report.issues.filter((i) => i.severity === 'warning').map((i) => i.code)).toEqual(expect.arrayContaining(['import.structure.unknownSheet', 'import.structure.unknownColumn']));
+    expect(Object.keys(r.workbook)).not.toContain('Notes');
+    expect(JSON.stringify(r.workbook)).not.toMatch(/remarks|prefers mornings|call the bank/);
+    const built = await ask({ type: 'build', requestId: 2, workbook: r.workbook });
+    if (built.type !== 'built' || !built.ok) throw new Error('not built');
+    expect(built.profile).toBe('sample');
+    expect(built.workbook).toEqual(r.workbook);
+  });
+
+  it('a personal-data sheet next to the template blocks the import', async () => {
+    const { ask } = harness();
+    const wb = exportTemplate(seed, { lang: 'tr', example: true });
+    wb.Personel = [['Ad Soyad', 'Maaş'], ['Ayşe Kaya', 85000]];
+    const r = await ask({ type: 'inspect', requestId: 1, bytes: await xlsx(wb) });
+    if (r.type !== 'inspected' || !r.ok) throw new Error('not inspected');
+    expect(r.report.issues.find((i) => i.code === 'import.privacy.personSheet')).toMatchObject({ severity: 'error', sheet: 'Personel' });
+    expect(JSON.stringify(r)).not.toContain('Ayşe');
   });
 });

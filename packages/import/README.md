@@ -10,8 +10,8 @@ type Workbook = Record<string, Cell[][]>;   // sheet → rows; rows[0] = Excel r
 ```
 
 Dates may arrive as ISO strings (`2027-01-31`, optionally with a time), `DD.MM.YYYY` text or Excel
-serial numbers (1900 system); numbers as numbers or text (`1250,50`, `48 500 000`; dot/comma
-thousands separators are rejected as ambiguous); booleans as booleans, `TRUE/FALSE`, `EVET/HAYIR`,
+serial numbers (1900 system); numbers as numbers or text (`1250,50`, `48 500 000`, `41.200.000,00`, `1,250.50`; a single dot
+or comma before exactly three digits, `1.250`, is `import.field.ambiguousSeparator`); booleans as booleans, `TRUE/FALSE`, `EVET/HAYIR`,
 `DOĞRU/YANLIŞ`, `1/0`. `isoToExcelSerial(iso)` helps writers that want real Excel dates.
 
 ## API
@@ -57,7 +57,7 @@ analyseWorkbook(wb, opts): { report, sheets, snapshotDate }   // parsed rows in 
     code: 'import.…',                   // i18n key (tr + en in @ceo-room/i18n), params below
     sheet: string | null, row: number | null,           // Excel row (data from row 4)
     column: string | null, columnLetter: string | null, // column key (row 1) + letter
-    value?: Cell,                       // the cell as read; never present for privacy hits
+    value?: Cell,                       // the cell as read; never on a cell with a privacy hit or for over-long text
     params: Record<string, string | number | boolean>,
   }]
 }
@@ -138,7 +138,10 @@ bps), scores 0–100 (→ hundredths), dates → SimDay with Day 1 = snapshot da
    ranges (percent/score 0–100, shifts 1–3, …), enums, ISO country codes, real dates, unique ids,
    text ≤ 120. **Privacy guard** (error, value never echoed): TCKN (check digits), IBAN (mod 97),
    e-mail, phone numbers in any text cell of any sheet (figures and dates are not scanned for TCKN or
-   phone patterns); person-level column headers anywhere and any extra column in Workforce.
+   phone patterns); person-level column headers anywhere, any extra column in Workforce, and sheets
+   outside the template with a personal name or header (`import.privacy.personSheet`). A percent
+   column with only fractions (0.95) is a warning. `sanitiseWorkbook(wb)` gives the workbook as it
+   may be kept: template sheets and known columns only.
 3. **Cross-sheet:** foreign keys (incl. each id of `product_ids`), BOM per product, no duplicate BOM or
    price lines, preferred supplier quotes the material, every product made in a plant with lines,
    order plant makes the product, progress ≤ qty, Demand qty range, ≤ 24 h per line-day, dates vs the

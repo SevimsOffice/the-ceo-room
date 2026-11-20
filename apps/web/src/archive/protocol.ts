@@ -44,7 +44,7 @@ export type DownloadKind = 'example' | 'empty' | 'reportXlsx' | 'reportCsv';
 export type ArchiveRequest =
   /** the Excel template: filled with the sample company (example) or empty, in a language */
   | { type: 'template'; requestId: number; lang: Locale; example: boolean }
-  /** read and validate an uploaded file (nothing is stored) */
+  /** read and validate an uploaded file (nothing is stored; the answer carries the sanitised workbook) */
   | { type: 'inspect'; requestId: number; bytes: ArrayBuffer }
   /** convert a validated workbook into the engine's SeedBundle (My company) */
   | { type: 'build'; requestId: number; workbook: Workbook }
@@ -57,7 +57,8 @@ export type ArchiveResponse =
   | { type: 'file'; requestId: number; file: Blob }
   | { type: 'inspected'; requestId: number; ok: true; workbook: Workbook; report: ImportReport }
   | { type: 'inspected'; requestId: number; ok: false; failure: ReadFailure }
-  | { type: 'built'; requestId: number; ok: true; bundle: SeedBundle; profile: ProfileId; report: ImportReport; companyName: string }
+  /** `workbook`: the sanitised workbook (template sheets and known columns only), the one to keep */
+  | { type: 'built'; requestId: number; ok: true; workbook: Workbook; bundle: SeedBundle; profile: ProfileId; report: ImportReport; companyName: string }
   | { type: 'built'; requestId: number; ok: false; report: ImportReport }
   | { type: 'browsed'; requestId: number; book: BrowseBook }
   /** an unexpected exception while handling the request */

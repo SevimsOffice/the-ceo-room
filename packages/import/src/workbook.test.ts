@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { loadSeed } from '@ceo-room/seed-data';
 import { TEMPLATE, TEMPLATE_MARKER, TEMPLATE_VERSION, columnLetter, exportTemplate, isIban, isPersonalHeader, isTckn, isoToExcelSerial, parseBoolCell, parseDateCell, privacyHits } from './index';
-import { parseDecimal, scaleDecimal } from './workbook';
+import { parseDecimal, parseNumberText, scaleDecimal } from './workbook';
 
 const kurus = (c: string | number): number | null => {
   const d = parseDecimal(c);
@@ -23,6 +23,23 @@ describe('decimals are scaled exactly (no float money)', () => {
     expect(kurus('1.234.567')).toBeNull();
     expect(kurus('12a')).toBeNull();
     expect(kurus(Number.NaN)).toBeNull();
+  });
+
+  it('reads text numbers Turkish or English style only when unambiguous (1.250 is never 1,25 TL)', () => {
+    for (const amb of ['1.250', '12.500', '250.000', '1,250', '-12.500']) expect(parseNumberText(amb), amb).toBe('ambiguous');
+    expect(kurus('1.250')).toBeNull();
+    expect(kurus('1,25')).toBe(125);
+    expect(kurus('1250,5')).toBe(125050);
+    expect(kurus('0.125')).toBe(12); // a zero integer part cannot be a thousands group (half to even)
+    expect(kurus('1250.500')).toBe(125050);
+    expect(kurus('41.200.000,00')).toBe(4_120_000_000);
+    expect(kurus('1.250,50')).toBe(125050);
+    expect(kurus('1,250.50')).toBe(125050);
+    expect(kurus('41 200 000,00')).toBe(4_120_000_000);
+    for (const bad of ['1.2,5', '12,50.5', '1,250,50.0', '1.', ',5']) expect(kurus(bad), bad).toBeNull();
+    // numeric cells are numbers: never ambiguous
+    expect(kurus(1.25)).toBe(125);
+    expect(kurus(1250)).toBe(125000);
   });
 });
 
@@ -73,11 +90,33 @@ describe('privacy detectors', () => {
     }
   });
 
+  it('finds an IBAN followed by words or a currency, grouped or compact', () => {
+    for (const t of ['IBAN: TR33 0006 1005 1978 6457 8413 26 Ziraat', 'TR330006100519786457841326 TL', 'Ödeme TR33 0006 1005 1978 6457 8413 26 hesabına', 'tr330006100519786457841326', 'Hesap DE89 3704 0044 0532 0130 00 Commerzbank']) {
+      expect(privacyHits(t, false), t).toContain('iban');
+      expect(privacyHits(t, true), t).toContain('iban'); // also in figure columns
+    }
+    // a wrong check digit, or a code that merely starts like one, is not an IBAN
+    for (const t of ['TR33 0006 1005 1978 6457 8413 27 Ziraat', 'TR12 Konya OSB 3. Cadde', 'AB12 3456 7890 1234 5']) expect(privacyHits(t, false), t).not.toContain('iban');
+  });
+
+  it('finds phone numbers next to other numbers and landlines written without the 0', () => {
+    for (const t of ['Sipariş 12 05321234567', '212 555 12 12', 'Merkez (312) 444 12 34', 'Tel 0 532 123 45 67', 'Sipariş 7, 0532 123 45 67']) expect(privacyHits(t, false), t).toEqual(['phone']);
+    // not phones: plain long codes, dates, amounts and grouped figures; nothing is scanned for phones in figure columns
+    for (const t of ['2125551212', 'PO 2027 0042 0001', '04.01.2027 12:30', '12 500 000 000', 'Hat 3 vardiya 8 saat', 'SO-2027-0001-12', 'TR33 0006 1005 1978 6457 8413 26']) {
+      expect(privacyHits(t, false), t).not.toContain('phone');
+    }
+    expect(privacyHits('212 555 12 12', true)).toEqual([]);
+    expect(privacyHits('Sipariş 12 05321234567', true)).toEqual([]);
+  });
+
   it('flags personal-data headers', () => {
     for (const h of ['TCKN', 'tc_kimlik_no', 'E-posta', 'email', 'Telefon', 'GSM', 'IBAN', 'birth_date', 'Doğum Tarihi', 'employee_name', 'Ad Soyad', 'maaş', 'adres']) {
       expect(isPersonalHeader(h), h).toBe(true);
     }
-    for (const h of ['name', 'customer_name', 'headcount', 'notes', 'amount']) expect(isPersonalHeader(h), h).toBe(false);
+    for (const h of ['Ad', 'SOYAD', 'Ad Soyad', 'İsim', 'Yetkili', 'KİŞİ', 'Kişi', 'contact', 'Contact Person', 'contact_person', 'Name Surname', 'Salary', 'MAAŞ', 'TCKN', 'Personel No']) {
+      expect(isPersonalHeader(h), h).toBe(true);
+    }
+    for (const h of ['name', 'customer_name', 'headcount', 'notes', 'amount', 'product_name', 'adet', 'kalem', 'şehir', 'tarih', 'line_type']) expect(isPersonalHeader(h), h).toBe(false);
   });
 });
 

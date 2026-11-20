@@ -286,6 +286,7 @@ export const tr: Readonly<Record<string, string>> = {
   'ui.status.loading': 'Ofis açılıyor…',
   'ui.status.newDay': '{day:day}, {weekday:text}. Sabah raporu masada.',
   'ui.status.restoreFailed': 'Kayıtlı oyun yüklenemedi ({reason:text}). Eski oyun yedek olarak saklandı; yeni bir oyun başladı.',
+  'ui.status.companyFailed': 'Şirketiniz açılamadı ({reason:text}). Masada örnek şirket var; verileriniz Arşiv Odası’nda saklanmaya devam ediyor.',
   'ui.error.saveCorrupt': 'kayıt bozuk',
   'ui.error.saveUnreadable': 'kayıt okunamıyor',
   'ui.error.saveHashMismatch': 'yeniden oynanan oyun kaydedilen durumla aynı değil',
@@ -672,6 +673,9 @@ export const tr: Readonly<Record<string, string>> = {
   'ui.archive.read.notXlsx': 'Bu bir Excel (.xlsx) dosyası değil. Eski .xls ya da .csv dosyalarını Excel’de “.xlsx” olarak kaydedip yeniden yükleyin.',
   'ui.archive.read.corrupt': 'Dosya bozuk ya da bir çalışma kitabı değil. Excel’de açıp yeniden kaydetmeyi deneyin.',
   'ui.archive.read.failed': 'Dosya okunurken beklenmeyen bir hata oldu. Yeniden deneyin.',
+  'ui.archive.read.unzippedTooLarge': 'Dosya açıldığında {unzippedMb:int} MB’tan büyük oluyor; doldurulmuş bir şablondan çok daha fazla. Gereksiz sayfaları, resimleri ya da biçimlendirmeyi silip yeniden kaydedin.',
+  'ui.archive.read.tooManyCells': 'Dosyada çok fazla hücre var: toplamda en çok {cells:int} hücre, sayfa başına en çok {columns:int} sütun olabilir.',
+  'ui.archive.read.timeout': 'Dosyanın okunması çok uzun sürdü ve durduruldu. Yeniden deneyin ya da daha küçük bir dosya yükleyin.',
 
   'ui.archive.report.heading': 'Denetim Raporu',
   'ui.archive.report.placeholder': 'Henüz denetlenen dosya yok. Şablonu indirin, doldurun ve yükleyin: denetim raporu buraya daktilo edilir.',

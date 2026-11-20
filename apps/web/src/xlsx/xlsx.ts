@@ -11,9 +11,11 @@
 import writeXlsxFile from 'write-excel-file/universal';
 import readXlsxFile from 'read-excel-file/universal';
 import { type Cell, FIRST_DATA_ROW, type Row, TEMPLATE, type Workbook } from '@ceo-room/import';
-import { MAX_FILE_BYTES, type ReadFailure } from './limits';
+import { MAX_CELLS, MAX_COLUMNS, MAX_FILE_BYTES, MAX_UNZIPPED_BYTES, type ReadFailure } from './limits';
+import { fractionToPercent, percentCells } from './formats';
+import { readZipDirectory, unzippedSize } from './zip';
 
-export { MAX_FILE_BYTES, XLSX_MIME, type ReadFailure } from './limits';
+export { MAX_CELLS, MAX_COLUMNS, MAX_FILE_BYTES, MAX_UNZIPPED_BYTES, XLSX_MIME, type ReadFailure } from './limits';
 
 export class XlsxReadError extends Error {
   constructor(readonly code: ReadFailure, detail?: string) {
@@ -92,20 +94,48 @@ export async function workbookToXlsx(wb: Workbook): Promise<Blob> {
 /** ZIP files start with "PK". */
 const isZip = (b: Uint8Array): boolean => b.length >= 4 && b[0] === 0x50 && b[1] === 0x4b;
 
+/** Column indexes of the template's percent columns in a sheet, from its header row. */
+function percentColumns(sheet: string, header: Row | undefined): Set<number> {
+  const spec = TEMPLATE.sheets.find((s) => s.name === sheet);
+  const out = new Set<number>();
+  if (!spec || !header) return out;
+  header.forEach((h, i) => {
+    const key = typeof h === 'string' ? h.trim().toLowerCase() : null;
+    if (key && spec.columns.some((c) => c.key === key && c.type === 'percent')) out.add(i);
+  });
+  return out;
+}
+
 /**
  * Read an .xlsx file into the neutral model. Throws XlsxReadError: `empty`, `tooLarge`, `notXlsx`
- * (not a zip: e.g. .xls, .csv, a picture), `corrupt` (a zip that is not a readable workbook).
+ * (not a zip: e.g. .xls, .csv, a picture), `corrupt` (a zip that is not a readable workbook),
+ * `unzippedTooLarge` (the zip declares more than MAX_UNZIPPED_BYTES: refused before inflating),
+ * `tooManyCells` (more than MAX_CELLS cells or MAX_COLUMNS columns in a sheet).
+ *
+ * Numbers formatted as percentages in the template's percent columns are read as shown (a cell
+ * shown as 95 % is stored as 0.95 and becomes 95).
  */
-export async function xlsxToWorkbook(input: ArrayBuffer | Uint8Array): Promise<Workbook> {
+export async function xlsxToWorkbook(input: ArrayBuffer | Uint8Array, limits: { cells: number; columns: number } = { cells: MAX_CELLS, columns: MAX_COLUMNS }): Promise<Workbook> {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   if (bytes.length === 0) throw new XlsxReadError('empty');
   if (bytes.length > MAX_FILE_BYTES) throw new XlsxReadError('tooLarge');
   if (!isZip(bytes)) throw new XlsxReadError('notXlsx');
+  const entries = readZipDirectory(bytes);
+  if (!entries) throw new XlsxReadError('corrupt', 'no zip directory');
+  if (unzippedSize(entries) > MAX_UNZIPPED_BYTES) throw new XlsxReadError('unzippedTooLarge');
   let sheets: { sheet: string; data: unknown[][] }[];
   try {
     sheets = (await readXlsxFile(bytes, { trim: false })) as { sheet: string; data: unknown[][] }[];
   } catch (err) {
     throw new XlsxReadError('corrupt', err instanceof Error ? err.message : String(err));
+  }
+  let cells = 0;
+  for (const s of sheets) {
+    for (const r of s.data) {
+      if (r.length > limits.columns) throw new XlsxReadError('tooManyCells');
+      cells += r.length;
+    }
+    if (cells > limits.cells) throw new XlsxReadError('tooManyCells');
   }
   const wb: Workbook = {};
   for (const s of sheets) {
@@ -117,6 +147,16 @@ export async function xlsxToWorkbook(input: ArrayBuffer | Uint8Array): Promise<W
         return String(c);
       }),
     );
+  }
+  const percent = await percentCells(bytes, entries).catch(() => new Map<string, [number, number][]>());
+  for (const [sheet, at] of percent) {
+    const rows = wb[sheet];
+    const cols = percentColumns(sheet, rows?.[0]);
+    if (!rows || cols.size === 0) continue;
+    for (const [r, c] of at) {
+      const v = rows[r]?.[c];
+      if (r >= FIRST_DATA_ROW - 1 && cols.has(c) && typeof v === 'number') rows[r]![c] = fractionToPercent(v);
+    }
   }
   return wb;
 }

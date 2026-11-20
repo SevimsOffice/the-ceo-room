@@ -189,6 +189,8 @@ export type WorkerResponse =
     }
   /** the engine failed (an exception in the worker): the Desk offers a new game */
   | { type: 'fatal'; error: Msg }
+  /** the imported company of an `init` cannot run (nothing was started): the Desk opens the sample */
+  | { type: 'companyFailed'; error: Msg }
   /** the morning report after every state change; `version` increases with each change */
   | { type: 'report'; version: number; report: DeskReport }
   /** the projected runway and overall health for report `version`, computed after it was posted */

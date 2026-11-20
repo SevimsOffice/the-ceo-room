@@ -32,6 +32,7 @@ import {
   parseBoolCell,
   parseDateCell,
   parseDecimal,
+  parseNumberText,
   scaleDecimal,
 } from './workbook';
 
@@ -199,12 +200,16 @@ function parseCell(ctx: Ctx, sheet: ParsedSheet, row: number, c: ColumnSpec, raw
     }
     return v;
   };
+  if ((c.type === 'int' || c.type === 'money' || c.type === 'percent' || c.type === 'score') && typeof raw === 'string' && parseNumberText(raw) === 'ambiguous') {
+    return fail(ctx, 'import.field.ambiguousSeparator', where());
+  }
   switch (c.type) {
     case 'id':
     case 'text': {
       const t = cellText(raw)!;
       if (t.length > MAX_TEXT_LENGTH) {
-        ctx.issues.error('import.field.tooLong', where(), { max: MAX_TEXT_LENGTH });
+        // free text is not echoed: it may be a pasted note with anything in it
+        ctx.issues.error('import.field.tooLong', ctx.at(sheet, row, c.key), { max: MAX_TEXT_LENGTH });
         return null;
       }
       return t;
@@ -289,6 +294,19 @@ function readRows(ctx: Ctx, sheet: ParsedSheet, rows: Row[]): void {
   }
 }
 
+/**
+ * A percent column where every value given is a fraction (0 < x < 1) was most likely typed or
+ * formatted as Excel percentages (95 % stored as 0.95): a warning, since 0.95 % can be real.
+ */
+function checkPercentScale(ctx: Ctx, sheet: ParsedSheet): void {
+  for (const c of sheet.spec.columns) {
+    if (c.type !== 'percent' || !sheet.columns.has(c.key)) continue;
+    const given = sheet.rows.map((r) => r.values[c.key]).filter((v): v is number => typeof v === 'number' && v !== 0);
+    // values are basis points here: below 100 bps = below 1 in the template's units
+    if (given.length > 0 && given.every((v) => v > 0 && v < 100)) ctx.issues.warning('import.field.percentLooksFractional', ctx.at(sheet, null, c.key));
+  }
+}
+
 const PRIVACY_CODES: Record<PrivacyHit, IssueCode> = {
   tckn: 'import.privacy.tckn',
   iban: 'import.privacy.iban',
@@ -318,6 +336,35 @@ function scanPrivacy(ctx: Ctx): void {
     }
   }
 }
+
+/**
+ * A sheet outside the template is dropped on import (never stored), but it must not carry personal
+ * data either: a personal-looking sheet name or header (row 1) is an error, anything else a warning.
+ */
+function unknownSheet(ctx: Ctx, name: string, rows: Row[]): void {
+  const header = rows[0] ?? [];
+  const at = header.findIndex((h) => {
+    const t = cellText(h);
+    return t !== null && isPersonalHeader(t);
+  });
+  if (at >= 0) {
+    ctx.issues.error('import.privacy.personSheet', { sheet: name, row: 1, column: normaliseHeader(cellText(header[at])!), columnLetter: columnLetter(at) });
+  } else if (isPersonalHeader(name)) {
+    ctx.issues.error('import.privacy.personSheet', { sheet: name });
+  } else {
+    ctx.issues.warning('import.structure.unknownSheet', { sheet: name });
+  }
+}
+
+/** No finding echoes the value of a cell where the privacy guard found personal data. */
+function scrubPrivateValues(ctx: Ctx): void {
+  const key = (i: { sheet: string | null; row: number | null; columnLetter: string | null }): string => `${i.sheet}\u0000${i.row}\u0000${i.columnLetter}`;
+  const hits = new Set(ctx.issues.issues.filter((i) => i.code in PRIVACY_CELL_CODES && i.row !== null).map(key));
+  if (hits.size === 0) return;
+  for (const i of ctx.issues.issues) if (i.value !== undefined && hits.has(key(i))) delete i.value;
+}
+
+const PRIVACY_CELL_CODES: Readonly<Record<string, true>> = { 'import.privacy.tckn': true, 'import.privacy.iban': true, 'import.privacy.email': true, 'import.privacy.phone': true };
 
 // ---- level 3: cross-sheet ----------------------------------------------------------------------
 
@@ -627,7 +674,7 @@ export function analyseWorkbook(wb: Workbook, opts: ValidateOptions = {}): Analy
   const ctx = new Ctx(wb);
   const templateVersion = checkVersion(ctx);
   const known = new Set<string>(['README', ...TEMPLATE.sheets.map((x) => x.name)]);
-  for (const name of Object.keys(wb)) if (!known.has(name)) ctx.issues.warning('import.structure.unknownSheet', { sheet: name });
+  for (const name of Object.keys(wb)) if (!known.has(name)) unknownSheet(ctx, name, wb[name] ?? []);
   for (const spec of TEMPLATE.sheets) {
     const rows = wb[spec.name];
     if (!rows) {
@@ -644,6 +691,7 @@ export function analyseWorkbook(wb: Workbook, opts: ValidateOptions = {}): Analy
       continue;
     }
     readRows(ctx, sheet, rows);
+    checkPercentScale(ctx, sheet);
     if (sheet.rows.length < spec.minRows) ctx.issues.error('import.structure.tooFewRows', { sheet: spec.name, row: FIRST_DATA_ROW }, { min: spec.minRows });
     if (spec.single && sheet.rows.length > 1) ctx.issues.error('import.structure.singleRow', { sheet: spec.name, row: sheet.rows[1]!.row });
   }
@@ -666,6 +714,8 @@ export function analyseWorkbook(wb: Workbook, opts: ValidateOptions = {}): Analy
     crossChecks(ctx, snapshotDate);
     applyDefaults(ctx);
   }
+
+  scrubPrivateValues(ctx);
 
   const rows: Record<string, number> = {};
   for (const spec of TEMPLATE.sheets) if (ctx.sheets[spec.name].present) rows[spec.name] = ctx.sheets[spec.name].rows.length;

@@ -208,14 +208,26 @@ export function validateSeedBundle(raw: unknown): SeedValidation {
     c.list('finance.history', fin.history, { period: 'int', revenue: 'int', cogs: 'int', avgSatisfaction: 'int', overtimePersonHours: 'int', closingCash: 'intOrNull' });
   }
 
+  // Every id a card names must exist (a card firing on a missing record would stop the engine).
+  const offers = new Map(suppliers.map((s) => [String(s.id), new Set((s.offers as Rec[]).filter(isRec).map((o) => String(o.materialId)))]));
+  const workforceDepts = new Set((Array.isArray(raw.workforce) ? (raw.workforce as unknown[]) : []).filter(isRec).map((w) => String(w.departmentId)));
   c.list('eventCards', raw.eventCards, { id: 'str', kindKey: 'str', severity: 'str', trigger: 'obj', effect: 'obj' }, (r, p) => {
     const e = r.effect as Rec;
+    const t = r.trigger as Rec;
     if (typeof e.kind !== 'string') c.errors.push(`${p}.effect.kind: expected str`);
-    if (typeof e.customerId === 'string') c.ref(`${p}.effect.customerId`, e.customerId, customerIds);
-    if (typeof e.supplierId === 'string') c.ref(`${p}.effect.supplierId`, e.supplierId, supplierIds);
-    if (typeof e.materialId === 'string') c.ref(`${p}.effect.materialId`, e.materialId, materialIds);
-    if (typeof e.familyId === 'string') c.ref(`${p}.effect.familyId`, e.familyId, familyIds);
-    if (typeof e.lineId === 'string') c.ref(`${p}.effect.lineId`, e.lineId, lineIds);
+    if (typeof t.kind !== 'string') c.errors.push(`${p}.trigger.kind: expected str`);
+    if (t.kind === 'turnoverAbove') c.ref(`${p}.trigger.departmentId`, t.departmentId, workforceDepts);
+    if (e.kind === 'largeOrder' || e.kind === 'discountDemand' || e.kind === 'latePayment') c.ref(`${p}.effect.customerId`, e.customerId, customerIds);
+    if (e.kind === 'largeOrder') c.ref(`${p}.effect.familyId`, e.familyId, familyIds);
+    if (e.kind === 'lineBreakdown') c.ref(`${p}.effect.lineId`, e.lineId, lineIds);
+    if (e.kind === 'supplierPriceChange') {
+      c.ref(`${p}.effect.materialId`, e.materialId, materialIds);
+      for (const f of ['supplierId', 'alternativeSupplierId'] as const) {
+        c.ref(`${p}.effect.${f}`, e[f], supplierIds);
+        const sup = offers.get(String(e[f]));
+        if (sup && !sup.has(String(e.materialId))) c.errors.push(`${p}.effect.${f}: supplier ${String(e[f])} has no offer for ${String(e.materialId)}`);
+      }
+    }
   });
 
   if (c.errors.length) return { ok: false, errors: c.errors };

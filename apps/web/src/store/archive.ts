@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { createTranslator } from '@ceo-room/i18n';
 import { type ImportReport, type SheetName, type Workbook, canImport } from '@ceo-room/import';
-import type { ArchiveTransport } from '../archive/client';
+import { ARCHIVE_TIMEOUT, type ArchiveTransport } from '../archive/client';
 import type { BrowseBook, CompanyId, DownloadKind } from '../archive/protocol';
 import { MAX_FILE_BYTES, type ReadFailure, XLSX_MIME } from '../xlsx/limits';
 import { type CompanyDb, type MyCompanyMeta, memoryCompanyDb } from './companyDb';
@@ -140,7 +140,8 @@ export const useArchive = create<ArchiveState>()((set, get) => ({
     if (r.type === 'inspected' && r.ok) {
       set({ inspection: { status: 'ready', fileName, fileSize: file.size, report: r.report, workbook: r.workbook, imported: false } });
     } else {
-      set({ inspection: { status: 'failed', fileName, failure: r.type === 'inspected' && !r.ok ? r.failure : 'failed' } });
+      const failure = r.type === 'inspected' && !r.ok ? r.failure : r.type === 'failed' && r.detail === ARCHIVE_TIMEOUT ? 'timeout' : 'failed';
+      set({ inspection: { status: 'failed', fileName, failure } });
     }
   },
 
@@ -174,7 +175,8 @@ export const useArchive = create<ArchiveState>()((set, get) => ({
       profile: r.profile,
     };
     try {
-      await services.db.save({ meta, data: { workbook: i.workbook, bundle: r.bundle } });
+      // only the sanitised workbook is kept: template sheets and known columns (DATA_IMPORT_DESIGN §7)
+      await services.db.save({ meta, data: { workbook: r.workbook, bundle: r.bundle } });
     } catch {
       set({ pending: null, note: { code: 'ui.archive.note.storeFailed', params: {}, tone: 'bad' } });
       return;

@@ -22,6 +22,7 @@ import {
   selectProjectedRunway,
   stateHash,
   tuning,
+  validateSeedBundle,
 } from '@ceo-room/engine';
 import { buildDirectory } from './directory';
 import type { DossierView, RoomView, StoredSave, WorkerRequest, WorkerResponse } from './protocol';
@@ -56,6 +57,18 @@ const decisionNumber = (id: string): number => Number(/(\d+)$/.exec(id)?.[1] ?? 
 /** The note posted with `fatal`: what went wrong, for the error slip. */
 export function fatalError(err: unknown): Msg {
   return { code: 'ui.error.engineFailed', params: { detail: err instanceof Error ? err.message : String(err) } };
+}
+
+/** Why an imported bundle cannot run (its seed check fails or the engine refuses it at Day 1), or null. */
+export function cannotStart(bundle: SeedBundle): Msg | null {
+  const v = validateSeedBundle(JSON.parse(JSON.stringify(bundle)));
+  if (!v.ok) return { code: 'ui.error.engineFailed', params: { detail: v.errors[0] ?? 'invalid company data' } };
+  try {
+    createEngine(bundle, { rngSeed: RNG_SEED, workspaceId: WORKSPACE_ID });
+    return null;
+  } catch (err) {
+    return fatalError(err);
+  }
 }
 
 /** The save game for the current state, with the hash its replay must reach. */
@@ -275,6 +288,17 @@ export function createHandler(opts: HandlerOptions): Handler {
       return;
     }
     if (msg.type === 'init') {
+      if (msg.bundle) {
+        // an imported company that cannot start (stored by an older version, or damaged) is refused
+        // before anything runs: the Desk puts the sample back instead of failing on every reload
+        const error = cannotStart(msg.bundle);
+        if (error) {
+          seed = opts.seed;
+          engine = null;
+          post({ type: 'companyFailed', error });
+          return;
+        }
+      }
       seed = msg.bundle ?? opts.seed;
       start(msg.save, msg.unreadable === true);
       return;

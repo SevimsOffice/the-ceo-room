@@ -19,7 +19,10 @@ export interface ImportIssue {
   column: string | null;
   /** Excel column letter of `column` (A, B, …), null when the column is absent */
   columnLetter: string | null;
-  /** the cell value as read; omitted for privacy findings so personal data is never echoed */
+  /**
+   * the cell value as read; omitted for every finding on a cell with a privacy hit (so personal data
+   * is never echoed) and for over-long text
+   */
   value?: Cell;
   params: IssueParams;
 }
@@ -69,12 +72,15 @@ export const ISSUE_CODES = {
   'import.field.tooLong': ['max'],
   'import.field.duplicate': [],
   'import.field.rounded': ['decimals'],
+  'import.field.ambiguousSeparator': [],
+  'import.field.percentLooksFractional': [],
   // privacy guard
   'import.privacy.tckn': [],
   'import.privacy.iban': [],
   'import.privacy.email': [],
   'import.privacy.phone': [],
   'import.privacy.personColumn': [],
+  'import.privacy.personSheet': [],
   // cross-sheet and business rules
   'import.fk.missing': ['target'],
   'import.bom.missing': [],

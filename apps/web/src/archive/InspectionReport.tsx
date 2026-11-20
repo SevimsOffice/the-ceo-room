@@ -4,7 +4,7 @@ import { useT } from '../i18n';
 import { importReady, useArchive } from '../store/archive';
 import { canSwitchCompany, useGame } from '../store/game';
 import { PaperNoise } from '../desk/Atmosphere';
-import { MAX_FILE_BYTES } from '../xlsx/limits';
+import { MAX_CELLS, MAX_COLUMNS, MAX_FILE_BYTES, MAX_UNZIPPED_BYTES } from '../xlsx/limits';
 
 /** At most this many findings are typed on the sheet; the downloaded report has them all. */
 export const REPORT_LINES = 120;
@@ -123,7 +123,7 @@ export function InspectionReport() {
     body = (
       <div className="mt-3" role="alert" data-testid="read-failure" data-failure={inspection.failure}>
         <p className="m-0 font-type text-label font-bold text-oxblood-ink">{t.t('ui.archive.read.title', { name: inspection.fileName })}</p>
-        <p className="m-0 mt-1 font-type text-label leading-snug">{t.t(`ui.archive.read.${inspection.failure}`, { mb: MAX_FILE_BYTES / (1024 * 1024) })}</p>
+        <p className="m-0 mt-1 font-type text-label leading-snug">{t.t(`ui.archive.read.${inspection.failure}`, { mb: MAX_FILE_BYTES / (1024 * 1024), unzippedMb: MAX_UNZIPPED_BYTES / (1024 * 1024), cells: MAX_CELLS, columns: MAX_COLUMNS })}</p>
       </div>
     );
   } else {

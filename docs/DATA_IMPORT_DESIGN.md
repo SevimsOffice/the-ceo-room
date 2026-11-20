@@ -216,6 +216,26 @@ drawers, brass label holders and a green-shaded reading lamp.
 - **No personal employee data:** workforce only as department totals; the privacy guard rejects
   personal identifiers anywhere in the file. Customer/supplier records are companies.
 - **Local first:** in 4a nothing leaves the browser.
+- **Sanitised storage (M4a review):** only the template's sheets and known columns are kept. The
+  archive worker validates the file as uploaded (so the report shows everything, including unknown
+  sheets and columns as warnings), then hands the page a sanitised workbook (`sanitiseWorkbook`):
+  README reduced to marker + version, rows 2–3 emptied, unknown sheets and columns, notes and any
+  cell outside a known column dropped; data rows keep their Excel row numbers and known columns
+  their letters. Only that workbook and the built bundle go to IndexedDB, never the raw file.
+- **Personal-data guard, extended:** a sheet outside the template whose name or row-1 header looks
+  personal (`Personel`, `Ad Soyad`, `Maaş`, …) is an error (`import.privacy.personSheet`), not a
+  warning; unknown columns are matched against personal headers folded to ASCII (`ad`, `soyad`,
+  `ad soyad`, `isim`, `yetkili`, `kişi`, `contact`, `contact_person`, `name surname`, `salary`/`maaş`,
+  `tckn`, …); template columns such as Customers/Suppliers `name` (company names) are matched first
+  and never flagged. IBANs are found from every possible start at the country's length (TR 26,
+  others 15–34) where a group ends, so trailing words or a currency do not hide them; phone numbers
+  are found in any 10–11-digit window of a digit run (`Sipariş 12 05321234567`) and landlines
+  without the trunk 0 when grouped like a phone (`212 555 12 12`). Figure and date columns are still
+  not scanned for phones or TCKN.
+- **No echo:** no finding carries the value of a cell where personal data was found (whatever the
+  finding), nor the text of an over-long text cell. The CSV and xlsx inspection reports write every
+  cell as text, and text starting with `=`, `+`, `-`, `@`, tab or CR gets a leading `'` (no formula
+  injection).
 - **LLM consent:** before any imported data is sent to an LLM (Milestone 6+), an explicit,
   per-workspace consent stating what is sent (selector outputs only, department-scoped, never raw
   sheets), to which provider, and retention. Off by default; revocable; every LLM call logged.
@@ -259,4 +279,33 @@ API and full column list: `packages/import/README.md`. Refinements of §2–§4:
 - **Acceptance:** NOVARA → template (tr or en) → validate (0 errors) → `toSeedBundle(NOVARA_PROFILE)`
   rebuilds the seed bundle byte for byte apart from `source` / `snapshotDate`; the engine's Day-1 and
   Day-31 (same commands) states hash identically after normalising the company record.
+
+### Review fixes (M4a)
+
+- **Storyline rule:** My company runs NOVARA's storyline only when the imported data *is* the
+  sample: the bundle built with the storyline profile equals the seed in everything but the company
+  record (name, city, currency, snapshot date) and plain labels (`name`, `kindName`). Same ids with
+  other figures, or records missing, get `GENERIC_PROFILE` (`simulated: false`, no department heads,
+  data-driven cards only). The engine's `validateSeedBundle` now checks every id a card names
+  (customer, family, line, supplier, `alternativeSupplierId`, both suppliers' offer for the material,
+  the turnover trigger's department) and returns a typed error instead of an `InvariantError` at
+  `createEngine`. A stored My company that still cannot start (`cannotStart` in the engine worker:
+  seed check + Day-1 start) is refused before anything runs; the Desk opens the sample with a status
+  slip (`ui.status.companyFailed`) and the sample stays on the desk after a reload.
+- **Number text:** spaces group digits anywhere; with both `.` and `,` the last is the decimal
+  separator and the other must group by threes (`41.200.000,00`, `1,250.50`); one separator once is
+  a decimal point (`1,25`, `1250,5`, `0.125`) except before exactly three digits after a 1–3 digit
+  integer part (`1.250`, `12.500`, `250,000`), which is `import.field.ambiguousSeparator` (error);
+  one separator repeated without a decimal part (`24.000.000`) stays `notNumber`. Numeric cells are
+  numbers and never ambiguous.
+- **Percent cells:** the xlsx adapter reads `styles.xml` and each sheet's cell styles; numbers in the
+  template's percent columns with a percent format (built-in 9/10 or a custom code with `%`) are read
+  as shown (0.95 → 95, by moving the decimal point). Independently, a percent column whose given
+  non-zero values are all below 1 gets the warning `import.field.percentLooksFractional`.
+- **Limits:** file ≤ 8 MB; the zip central directory is read before anything is inflated and a
+  declared total above 64 MB (or ZIP64 sizes) is refused (`ui.archive.read.unzippedTooLarge`); at
+  most 2 000 000 cells in all and 200 columns per sheet (`tooManyCells`); ≤ 5 000 data rows per
+  sheet (validator). The archive worker transport times out after 60 s: the worker is stopped,
+  waiting requests fail with `timeout` (`ui.archive.read.timeout`), the next request starts a new
+  worker.
 

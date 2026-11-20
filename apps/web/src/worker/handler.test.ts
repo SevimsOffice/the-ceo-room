@@ -291,7 +291,7 @@ describe('My company (an imported bundle)', () => {
   it('init with a bundle runs that company: real dates, its own save; newGame and restore stay on it', async () => {
     const { exportTemplate } = await import('@ceo-room/import');
     const { buildCompany } = await import('../archive/handler');
-    const built = buildCompany(exportTemplate(seed, { lang: 'tr', example: true }));
+    const built = buildCompany(exportTemplate(seed, { lang: 'tr', example: true }), seed);
     if (!built.ok) throw new Error('not built');
     const { h, out } = setup();
     await h.handle({ type: 'init', save: null, bundle: built.bundle });
